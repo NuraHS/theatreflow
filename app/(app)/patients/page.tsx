@@ -1,0 +1,69 @@
+import { Activity, Bell, Search } from "lucide-react";
+import { PatientCard } from "@/components/workflow/patient-card";
+import { PatientCreateForm } from "@/components/workflow/patient-create-form";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { getDelayReasons, getInfrastructureEvents, getTodaysPatients } from "@/lib/repositories/workflow-repository";
+
+export default async function PatientsPage() {
+  const [patients, delayReasons, infrastructureEvents] = await Promise.all([
+    getTodaysPatients(),
+    getDelayReasons(),
+    getInfrastructureEvents()
+  ]);
+  const activeInfrastructure = infrastructureEvents.filter((event) => event.active);
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" aria-hidden="true" />
+              <h1 className="text-2xl font-bold tracking-normal">Today&apos;s CEPOD Patients</h1>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">Mobile-first workflow capture with automatic timestamps.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={patients.some((patient) => patient.delay_status === "red") ? "red" : "green"}>
+              {patients.filter((patient) => patient.delay_status !== "green").length} delayed
+            </Badge>
+            <Badge tone={activeInfrastructure.length ? "amber" : "green"}>
+              {activeInfrastructure.length} active infrastructure events
+            </Badge>
+          </div>
+        </div>
+      </section>
+
+      {activeInfrastructure.length ? (
+        <Card className="border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              Live notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {activeInfrastructure.map((event) => (
+              <p key={event.id} className="text-sm font-medium">{event.type}: {event.description}</p>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <Input className="pl-10" placeholder="Search by hospital number" />
+      </div>
+
+      <PatientCreateForm />
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        {patients.map((patient) => (
+          <PatientCard key={patient.id} patient={patient} delayReasons={delayReasons} />
+        ))}
+      </section>
+    </div>
+  );
+}

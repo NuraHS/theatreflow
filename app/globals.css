@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 192 74% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 192 74% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 192 74% 18%;
+    --primary: 192 95% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 187 92% 92%;
+    --secondary-foreground: 192 74% 18%;
+    --muted: 190 30% 94%;
+    --muted-foreground: 192 33% 34%;
+    --accent: 158 64% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 190 24% 86%;
+    --input: 190 24% 86%;
+    --ring: 192 95% 33%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 193 71% 8%;
+    --foreground: 190 60% 96%;
+    --card: 193 62% 11%;
+    --card-foreground: 190 60% 96%;
+    --popover: 193 62% 11%;
+    --popover-foreground: 190 60% 96%;
+    --primary: 188 86% 53%;
+    --primary-foreground: 193 71% 8%;
+    --secondary: 191 48% 18%;
+    --secondary-foreground: 190 60% 96%;
+    --muted: 191 36% 17%;
+    --muted-foreground: 190 26% 72%;
+    --accent: 158 64% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 191 35% 22%;
+    --input: 191 35% 22%;
+    --ring: 188 86% 53%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  :focus-visible {
+    @apply outline-none ring-4 ring-ring/30;
+  }
+}
+
+@layer components {
+  .clinical-grid {
+    background-image:
+      linear-gradient(rgba(8, 145, 178, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(8, 145, 178, 0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+}
