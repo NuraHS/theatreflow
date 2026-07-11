@@ -4,18 +4,18 @@ export const DEFAULT_WORKFLOW_ID = "cepod-emergency-theatres";
 
 export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   {
-    id: "decision-to-operate",
+    id: "patient-on-list",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Decision to Operate",
+    name: "Patient on list",
     display_order: 1,
-    colour: "#0f766e",
+    colour: "#64748b",
     delay_threshold_minutes: 30,
     board_band: "Waiting"
   },
   {
     id: "sent-for",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Sent For",
+    name: "Patient Sent For",
     display_order: 2,
     colour: "#0891b2",
     delay_threshold_minutes: 20,
@@ -24,7 +24,7 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   {
     id: "patient-arrived",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Patient Arrived",
+    name: "Patient Arrived in Anaesthetic Room",
     display_order: 3,
     colour: "#2563eb",
     delay_threshold_minutes: 15,
@@ -40,57 +40,48 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
     board_band: "Anaesthetic"
   },
   {
-    id: "knife-to-skin",
+    id: "patient-in-theatre",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Knife to Skin",
+    name: "Patient in Theatre",
     display_order: 5,
+    colour: "#0e7490",
+    delay_threshold_minutes: 15,
+    board_band: "Operating"
+  },
+  {
+    id: "operation-started",
+    workflow_id: DEFAULT_WORKFLOW_ID,
+    name: "Operation started",
+    display_order: 6,
     colour: "#dc2626",
     delay_threshold_minutes: 120,
     board_band: "Operating"
   },
   {
-    id: "procedure-finished",
+    id: "operation-finished",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Procedure Finished",
-    display_order: 6,
+    name: "Operation finished",
+    display_order: 7,
     colour: "#ea580c",
     delay_threshold_minutes: 20,
     board_band: "Operating"
   },
   {
-    id: "out-of-theatre",
+    id: "patient-in-recovery",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Out of Theatre",
-    display_order: 7,
-    colour: "#ca8a04",
-    delay_threshold_minutes: 15,
-    board_band: "Recovery"
-  },
-  {
-    id: "recovery-ready",
-    workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Recovery Ready for Discharge",
+    name: "Patient in Recovery",
     display_order: 8,
     colour: "#16a34a",
     delay_threshold_minutes: 30,
     board_band: "Recovery"
   },
   {
-    id: "left-recovery",
+    id: "patient-out-of-recovery",
     workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Left Recovery",
+    name: "Patient out of Recovery",
     display_order: 9,
     colour: "#15803d",
     delay_threshold_minutes: 25,
-    board_band: "Ward"
-  },
-  {
-    id: "returned-to-ward",
-    workflow_id: DEFAULT_WORKFLOW_ID,
-    name: "Returned to Ward",
-    display_order: 10,
-    colour: "#166534",
-    delay_threshold_minutes: 60,
     board_band: "Ward"
   }
 ];
@@ -126,23 +117,4 @@ export const DEFAULT_DELAY_REASONS: DelayReason[] = [
   active: true
 }));
 
-export const DEMO_INFRASTRUCTURE_EVENTS: InfrastructureEvent[] = [
-  {
-    id: "lift-west-2",
-    type: "Lift failure",
-    start_time: new Date(Date.now() - 54 * 60_000).toISOString(),
-    end_time: null,
-    description: "West theatre lift unavailable. Portering using east corridor.",
-    severity: "high",
-    active: true
-  },
-  {
-    id: "recovery-pressure",
-    type: "Recovery closed",
-    start_time: new Date(Date.now() - 115 * 60_000).toISOString(),
-    end_time: new Date(Date.now() - 45 * 60_000).toISOString(),
-    description: "Recovery staffing reduced capacity to two bays.",
-    severity: "medium",
-    active: false
-  }
-];
+export const DEMO_INFRASTRUCTURE_EVENTS: InfrastructureEvent[] = [];

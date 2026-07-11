@@ -1,18 +1,20 @@
-import { Activity, Bell, Search } from "lucide-react";
-import { PatientCard } from "@/components/workflow/patient-card";
+import { Activity, Bell } from "lucide-react";
+import { CepodWorkflow } from "@/components/workflow/cepod-workflow";
 import { PatientCreateForm } from "@/components/workflow/patient-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { getDelayReasons, getInfrastructureEvents, getTodaysPatients } from "@/lib/repositories/workflow-repository";
+import { getDelayReasons, getInfrastructureEvents, getTodaysPatients, getWorkflowStages } from "@/lib/repositories/workflow-repository";
 
 export default async function PatientsPage() {
-  const [patients, delayReasons, infrastructureEvents] = await Promise.all([
+  const [patients, delayReasons, infrastructureEvents, stages] = await Promise.all([
     getTodaysPatients(),
     getDelayReasons(),
-    getInfrastructureEvents()
+    getInfrastructureEvents(),
+    getWorkflowStages()
   ]);
   const activeInfrastructure = infrastructureEvents.filter((event) => event.active);
+  const today = new Date().toISOString().slice(0, 10);
+  const cepodPatients = patients.filter((patient) => (patient.operation_date ?? patient.created_at.slice(0, 10)) <= today);
 
   return (
     <div className="space-y-5">
@@ -26,8 +28,8 @@ export default async function PatientsPage() {
             <p className="mt-1 text-sm text-muted-foreground">Mobile-first workflow capture with automatic timestamps.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge tone={patients.some((patient) => patient.delay_status === "red") ? "red" : "green"}>
-              {patients.filter((patient) => patient.delay_status !== "green").length} delayed
+            <Badge tone={cepodPatients.some((patient) => patient.delay_status === "red") ? "red" : "green"}>
+              {cepodPatients.filter((patient) => patient.delay_status !== "green").length} delayed
             </Badge>
             <Badge tone={activeInfrastructure.length ? "amber" : "green"}>
               {activeInfrastructure.length} active infrastructure events
@@ -52,18 +54,8 @@ export default async function PatientsPage() {
         </Card>
       ) : null}
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-muted-foreground" aria-hidden="true" />
-        <Input className="pl-10" placeholder="Search by hospital number" />
-      </div>
-
       <PatientCreateForm />
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        {patients.map((patient) => (
-          <PatientCard key={patient.id} patient={patient} delayReasons={delayReasons} />
-        ))}
-      </section>
+      <CepodWorkflow patients={patients} stages={stages} delayReasons={delayReasons} todayIso={new Date().toISOString()} />
     </div>
   );
 }

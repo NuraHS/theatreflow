@@ -1,7 +1,7 @@
 import type { DelayReason, InfrastructureEvent, MetricCard, PatientWithStage, WorkflowEvent } from "@/lib/types/domain";
 
 export function buildExecutiveMetrics(patients: PatientWithStage[], events: WorkflowEvent[]): MetricCard[] {
-  const completed = patients.filter((patient) => patient.current_stage === "returned-to-ward").length;
+  const completed = patients.filter((patient) => patient.current_stage === "patient-out-of-recovery").length;
   const cancelled = patients.filter((patient) => patient.cancelled).length;
   const delayed = patients.filter((patient) => patient.delay_status !== "green").length;
   const avgTurnaround = patients.length
@@ -11,7 +11,7 @@ export function buildExecutiveMetrics(patients: PatientWithStage[], events: Work
   return [
     { label: "Total cases", value: String(patients.length), change: "+8% vs last 7 days", tone: "neutral" },
     { label: "Average turnaround", value: `${avgTurnaround}m`, change: "Measured from current stage", tone: "neutral" },
-    { label: "Cases completed", value: String(completed), change: "Returned to ward", tone: "good" },
+    { label: "Cases completed", value: String(completed), change: "Patient out of recovery", tone: "good" },
     { label: "Cases cancelled", value: String(cancelled), change: "Audit retained", tone: cancelled ? "warning" : "good" },
     { label: "Cases delayed", value: String(delayed), change: `${events.filter((event) => event.delay_reason_ids.length).length} delay events`, tone: delayed ? "warning" : "good" },
     { label: "Average theatre turnaround", value: "31m", change: "Procedure finish to next knife", tone: "neutral" },

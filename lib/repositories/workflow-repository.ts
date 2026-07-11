@@ -1,21 +1,22 @@
 import { DEFAULT_DELAY_REASONS, DEFAULT_WORKFLOW_STAGES, DEMO_INFRASTRUCTURE_EVENTS } from "@/lib/constants/workflow";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { DelayReason, InfrastructureEvent, Patient, WorkflowEvent, WorkflowStage } from "@/lib/types/domain";
+import { getStageByIdOrName } from "@/lib/services/workflow-engine";
 import { getDelayStatus } from "@/lib/utils/delay";
 import { minutesSince } from "@/lib/utils/time";
 import { demoData } from "./demo-data";
 
 export async function getWorkflowStages(): Promise<WorkflowStage[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return DEFAULT_WORKFLOW_STAGES;
 
   const { data, error } = await supabase.from("workflow_stages").select("*").order("display_order");
   if (error || !data?.length) return DEFAULT_WORKFLOW_STAGES;
-  return data as WorkflowStage[];
+  return normaliseCepodStages(data as WorkflowStage[]);
 }
 
 export async function getDelayReasons(): Promise<DelayReason[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return DEFAULT_DELAY_REASONS;
 
   const { data, error } = await supabase.from("delay_reasons").select("*").eq("active", true).order("label");
@@ -24,7 +25,7 @@ export async function getDelayReasons(): Promise<DelayReason[]> {
 }
 
 export async function getInfrastructureEvents(): Promise<InfrastructureEvent[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return DEMO_INFRASTRUCTURE_EVENTS;
 
   const { data, error } = await supabase.from("infrastructure_events").select("*").order("start_time", { ascending: false });
@@ -33,13 +34,13 @@ export async function getInfrastructureEvents(): Promise<InfrastructureEvent[]> 
 }
 
 export async function getTodaysPatients() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   const stages = await getWorkflowStages();
   const events = supabase ? await getWorkflowEvents() : demoData.events;
   const patients = supabase ? await getPatients() : demoData.patients;
 
   return patients.map((patient) => {
-    const stage = stages.find((item) => item.id === patient.current_stage) ?? stages[0];
+    const stage = getStageByIdOrName(stages, patient.current_stage) ?? stages[0];
     const patientEvents = events
       .filter((event) => event.patient_id === patient.id)
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
@@ -48,6 +49,7 @@ export async function getTodaysPatients() {
 
     return {
       ...patient,
+      current_stage: stage.id,
       stage,
       last_event: lastEvent,
       elapsed_minutes: elapsed,
@@ -57,24 +59,24 @@ export async function getTodaysPatients() {
 }
 
 export async function getPatients(): Promise<Patient[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return demoData.patients;
-
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
 
   const { data, error } = await supabase
     .from("patients")
     .select("*")
-    .gte("created_at", since.toISOString())
     .order("created_at", { ascending: true });
 
   if (error || !data) return demoData.patients;
-  return data as Patient[];
+  return data.map((patient) => ({
+    ...patient,
+    procedure: patient.procedure ?? patient.procedure_name ?? "Not recorded",
+    operation_date: patient.operation_date ?? patient.created_at.slice(0, 10)
+  })) as Patient[];
 }
 
 export async function getWorkflowEvents(): Promise<WorkflowEvent[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return demoData.events;
 
   const { data, error } = await supabase
@@ -84,4 +86,14 @@ export async function getWorkflowEvents(): Promise<WorkflowEvent[]> {
 
   if (error || !data) return demoData.events;
   return data as WorkflowEvent[];
+}
+
+function normaliseCepodStages(stages: WorkflowStage[]) {
+  const withoutDecisionStage = stages.filter((stage) => stage.id !== "decision-to-operate");
+  const hasPatientOnList = withoutDecisionStage.some((stage) => stage.id === "patient-on-list");
+  const patientOnList = DEFAULT_WORKFLOW_STAGES.find((stage) => stage.id === "patient-on-list");
+
+  return [...(hasPatientOnList || !patientOnList ? [] : [patientOnList]), ...withoutDecisionStage].sort(
+    (a, b) => a.display_order - b.display_order
+  );
 }

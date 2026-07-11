@@ -20,9 +20,10 @@ export function DashboardFilters() {
       <Input placeholder="Procedure" />
       <Select aria-label="Priority">
         <option>All priorities</option>
-        <option>Immediate</option>
-        <option>Urgent</option>
-        <option>Expedited</option>
+        <option>P1</option>
+        <option>P2</option>
+        <option>P3</option>
+        <option>P4</option>
       </Select>
       <Input placeholder="Delay reason" />
       <Input placeholder="Infrastructure event" />

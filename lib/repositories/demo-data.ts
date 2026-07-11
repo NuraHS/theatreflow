@@ -7,18 +7,20 @@ import {
 import type { Patient, WorkflowEvent } from "@/lib/types/domain";
 
 const now = Date.now();
+const today = new Date(now).toISOString().slice(0, 10);
 
 export const demoPatients: Patient[] = [
   {
     id: "pt-001",
     hospital_number: "H456221",
-    patient_name: "Hidden in live mode",
+    patient_name: "A. Morgan",
     consultant: "Mr Ahmed",
     specialty: "General Surgery",
     procedure: "Emergency laparotomy",
-    cepod_priority: "Immediate",
+    cepod_priority: "P1",
+    operation_date: today,
     created_at: new Date(now - 196 * 60_000).toISOString(),
-    current_stage: "knife-to-skin",
+    current_stage: "operation-started",
     cancelled: false,
     cancellation_reason: null,
     workflow_id: DEFAULT_WORKFLOW_ID
@@ -26,11 +28,12 @@ export const demoPatients: Patient[] = [
   {
     id: "pt-002",
     hospital_number: "H219084",
-    patient_name: null,
+    patient_name: "B. Singh",
     consultant: "Ms Morgan",
     specialty: "Trauma & Orthopaedics",
     procedure: "Washout and debridement",
-    cepod_priority: "Urgent",
+    cepod_priority: "P2",
+    operation_date: today,
     created_at: new Date(now - 78 * 60_000).toISOString(),
     current_stage: "sent-for",
     cancelled: false,
@@ -40,13 +43,14 @@ export const demoPatients: Patient[] = [
   {
     id: "pt-003",
     hospital_number: "H884210",
-    patient_name: null,
+    patient_name: "C. Evans",
     consultant: "Dr Patel",
     specialty: "Urology",
     procedure: "Stent insertion",
-    cepod_priority: "Expedited",
+    cepod_priority: "P3",
+    operation_date: today,
     created_at: new Date(now - 38 * 60_000).toISOString(),
-    current_stage: "decision-to-operate",
+    current_stage: "patient-on-list",
     cancelled: false,
     cancellation_reason: null,
     workflow_id: DEFAULT_WORKFLOW_ID
@@ -54,13 +58,14 @@ export const demoPatients: Patient[] = [
   {
     id: "pt-004",
     hospital_number: "H770450",
-    patient_name: null,
+    patient_name: "D. Lewis",
     consultant: "Mr Ahmed",
     specialty: "General Surgery",
     procedure: "Appendicectomy",
-    cepod_priority: "Urgent",
+    cepod_priority: "P2",
+    operation_date: today,
     created_at: new Date(now - 252 * 60_000).toISOString(),
-    current_stage: "recovery-ready",
+    current_stage: "patient-in-recovery",
     cancelled: false,
     cancellation_reason: null,
     workflow_id: DEFAULT_WORKFLOW_ID
@@ -71,7 +76,7 @@ export const demoEvents: WorkflowEvent[] = [
   {
     id: "evt-001",
     patient_id: "pt-001",
-    workflow_stage_id: "decision-to-operate",
+    workflow_stage_id: "patient-on-list",
     timestamp: new Date(now - 196 * 60_000).toISOString(),
     user_id: "demo-user",
     user_name: "Theatre Coordinator",
@@ -115,7 +120,7 @@ export const demoEvents: WorkflowEvent[] = [
   {
     id: "evt-005",
     patient_id: "pt-001",
-    workflow_stage_id: "knife-to-skin",
+    workflow_stage_id: "operation-started",
     timestamp: new Date(now - 41 * 60_000).toISOString(),
     user_id: "demo-user",
     user_name: "Scrub Nurse",
@@ -137,7 +142,7 @@ export const demoEvents: WorkflowEvent[] = [
   {
     id: "evt-007",
     patient_id: "pt-003",
-    workflow_stage_id: "decision-to-operate",
+    workflow_stage_id: "patient-on-list",
     timestamp: new Date(now - 38 * 60_000).toISOString(),
     user_id: "demo-user",
     user_name: "Clinical Lead",
@@ -148,7 +153,7 @@ export const demoEvents: WorkflowEvent[] = [
   {
     id: "evt-008",
     patient_id: "pt-004",
-    workflow_stage_id: "recovery-ready",
+    workflow_stage_id: "patient-in-recovery",
     timestamp: new Date(now - 58 * 60_000).toISOString(),
     user_id: "demo-user",
     user_name: "Recovery Nurse",

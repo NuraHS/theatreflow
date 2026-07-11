@@ -6,7 +6,7 @@ export type UserRole =
   | "theatre_staff"
   | "read_only_auditor";
 
-export type CepodPriority = "Immediate" | "Urgent" | "Expedited" | "Elective";
+export type CepodPriority = "P1" | "P2" | "P3" | "P4" | "Immediate" | "Urgent" | "Expedited" | "Elective";
 
 export type DelaySeverity = "low" | "medium" | "high" | "critical";
 
@@ -26,7 +26,9 @@ export type Patient = {
   consultant: string;
   specialty: string;
   procedure: string;
+  procedure_name?: string | null;
   cepod_priority: CepodPriority;
+  operation_date: string | null;
   created_at: string;
   current_stage: string;
   cancelled: boolean;

@@ -11,11 +11,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import {
+  FREE_TEXT_OPERATION,
+  getConsultantsForSpecialty,
+  getOperationsForSpecialty,
+  SUPPORTED_SPECIALTIES
+} from "@/lib/constants/clinical-teams";
 import { createPatientSchema, type CreatePatientInput } from "@/lib/services/schemas";
 
 export function PatientCreateForm() {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [operationSelection, setOperationSelection] = React.useState("");
+  const defaultOperationDate = React.useMemo(() => toDateInputValue(new Date()), []);
   const form = useForm<CreatePatientInput>({
     resolver: zodResolver(createPatientSchema),
     defaultValues: {
@@ -24,10 +32,40 @@ export function PatientCreateForm() {
       consultant: "",
       specialty: "",
       procedure: "",
-      cepod_priority: "Urgent",
+      cepod_priority: "P2",
+      operation_date: defaultOperationDate,
       decision_to_operate_time: ""
     }
   });
+  const selectedSpecialty = form.watch("specialty");
+  const selectedProcedure = form.watch("procedure");
+  const consultantOptions = React.useMemo(() => getConsultantsForSpecialty(selectedSpecialty), [selectedSpecialty]);
+  const operationOptions = React.useMemo(() => getOperationsForSpecialty(selectedSpecialty), [selectedSpecialty]);
+  const customOperation = operationSelection === FREE_TEXT_OPERATION;
+
+  React.useEffect(() => {
+    const currentConsultant = form.getValues("consultant");
+    const currentProcedure = form.getValues("procedure");
+    if (!selectedSpecialty) {
+      if (currentConsultant) {
+        form.setValue("consultant", "", { shouldDirty: true, shouldValidate: true });
+      }
+      if (currentProcedure) {
+        form.setValue("procedure", "", { shouldDirty: true, shouldValidate: true });
+      }
+      setOperationSelection("");
+      return;
+    }
+
+    if (!consultantOptions.includes(currentConsultant as never)) {
+      form.setValue("consultant", "", { shouldDirty: true, shouldValidate: true });
+    }
+
+    if (operationSelection !== FREE_TEXT_OPERATION && currentProcedure && !operationOptions.includes(currentProcedure)) {
+      form.setValue("procedure", "", { shouldDirty: true, shouldValidate: true });
+      setOperationSelection("");
+    }
+  }, [consultantOptions, form, operationOptions, operationSelection, selectedSpecialty]);
 
   async function onSubmit(values: CreatePatientInput) {
     const response = await fetch("/api/patients", {
@@ -43,9 +81,26 @@ export function PatientCreateForm() {
     }
 
     toast.success(result.demo ? "Demo patient created." : "Patient created.");
-    form.reset();
+    form.reset({
+      hospital_number: "",
+      patient_name: "",
+      consultant: "",
+      specialty: "",
+      procedure: "",
+      cepod_priority: "P2",
+      operation_date: toDateInputValue(new Date()),
+      decision_to_operate_time: ""
+    });
+    setOperationSelection("");
     setOpen(false);
     router.refresh();
+  }
+
+  function setCurrentDateTime() {
+    form.setValue("decision_to_operate_time", toDateTimeLocalValue(new Date()), {
+      shouldDirty: true,
+      shouldValidate: true
+    });
   }
 
   return (
@@ -54,7 +109,7 @@ export function PatientCreateForm() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle>Create Patient</CardTitle>
-            <CardDescription>Decision to Operate is the first workflow timestamp.</CardDescription>
+            <CardDescription>Patient on list is the first workflow timestamp.</CardDescription>
           </div>
           <Button type="button" variant="outline" onClick={() => setOpen((current) => !current)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -71,26 +126,87 @@ export function PatientCreateForm() {
             <Field label="Patient Name (optional)">
               <Input {...form.register("patient_name")} autoComplete="off" />
             </Field>
-            <Field label="Consultant" error={form.formState.errors.consultant?.message}>
-              <Input {...form.register("consultant")} />
-            </Field>
             <Field label="Specialty" error={form.formState.errors.specialty?.message}>
-              <Input {...form.register("specialty")} />
-            </Field>
-            <Field label="Procedure" error={form.formState.errors.procedure?.message}>
-              <Input {...form.register("procedure")} />
-            </Field>
-            <Field label="Priority">
-              <Select {...form.register("cepod_priority")}>
-                <option>Immediate</option>
-                <option>Urgent</option>
-                <option>Expedited</option>
-                <option>Elective</option>
+              <Select {...form.register("specialty")}>
+                <option value="">Select specialty</option>
+                {SUPPORTED_SPECIALTIES.map((specialty) => (
+                  <option key={specialty} value={specialty}>
+                    {specialty}
+                  </option>
+                ))}
               </Select>
             </Field>
-            <Field label="Decision to Operate time">
-              <Input type="datetime-local" {...form.register("decision_to_operate_time")} />
+            <Field label="Consultant" error={form.formState.errors.consultant?.message}>
+              <Select {...form.register("consultant")} disabled={!selectedSpecialty}>
+                <option value="">{selectedSpecialty ? "Select consultant" : "Select specialty first"}</option>
+                {consultantOptions.map((consultant) => (
+                  <option key={consultant} value={consultant}>
+                    {consultant}
+                  </option>
+                ))}
+              </Select>
             </Field>
+            <div className="space-y-2">
+              <Label htmlFor="operation-select">Operation</Label>
+              <Select
+                id="operation-select"
+                value={operationSelection}
+                disabled={!selectedSpecialty}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setOperationSelection(value);
+                  form.setValue("procedure", value === FREE_TEXT_OPERATION ? "" : value, {
+                    shouldDirty: true,
+                    shouldValidate: true
+                  });
+                }}
+              >
+                <option value="">{selectedSpecialty ? "Select operation" : "Select specialty first"}</option>
+                {operationOptions.map((operation) => (
+                  <option key={operation} value={operation}>
+                    {operation}
+                  </option>
+                ))}
+                <option value={FREE_TEXT_OPERATION}>Free text</option>
+              </Select>
+              {customOperation ? (
+                <Input
+                  className="mt-2"
+                  placeholder="Type operation"
+                  autoComplete="off"
+                  value={customOperation ? selectedProcedure : ""}
+                  onChange={(event) => {
+                    form.setValue("procedure", event.target.value, {
+                      shouldDirty: true,
+                      shouldValidate: true
+                    });
+                  }}
+                />
+              ) : null}
+              {form.formState.errors.procedure?.message ? (
+                <p className="text-sm font-medium text-destructive">{form.formState.errors.procedure.message}</p>
+              ) : null}
+            </div>
+            <Field label="Priority">
+              <Select {...form.register("cepod_priority")}>
+                <option value="P1">P1: Immediate (&lt;24hrs)</option>
+                <option value="P2">P2: Urgent</option>
+                <option value="P3">P3: Expedited</option>
+                <option value="P4">P4: Elective</option>
+              </Select>
+            </Field>
+            <Field label="Operation date">
+              <Input type="date" {...form.register("operation_date")} />
+            </Field>
+            <div className="space-y-2">
+              <Label htmlFor="patient-on-list-time">Patient on list time</Label>
+              <div className="flex items-center gap-2">
+                <Input id="patient-on-list-time" type="datetime-local" className="min-w-0 flex-1" {...form.register("decision_to_operate_time")} />
+                <Button type="button" variant="outline" className="shrink-0 px-4" onClick={setCurrentDateTime}>
+                  Now
+                </Button>
+              </div>
+            </div>
             <div className="flex items-end">
               <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Creating..." : "Create Patient"}
@@ -101,6 +217,16 @@ export function PatientCreateForm() {
       ) : null}
     </Card>
   );
+}
+
+function toDateTimeLocalValue(date: Date) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function toDateInputValue(date: Date) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return offsetDate.toISOString().slice(0, 10);
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {

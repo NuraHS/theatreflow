@@ -6,7 +6,8 @@ export const createPatientSchema = z.object({
   consultant: z.string().min(2, "Consultant is required"),
   specialty: z.string().min(2, "Specialty is required"),
   procedure: z.string().min(2, "Procedure is required"),
-  cepod_priority: z.enum(["Immediate", "Urgent", "Expedited", "Elective"]),
+  cepod_priority: z.enum(["P1", "P2", "P3", "P4"]),
+  operation_date: z.string().optional(),
   decision_to_operate_time: z.string().optional()
 });
 

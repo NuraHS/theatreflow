@@ -231,16 +231,15 @@ values ('cepod-emergency-theatres', 'CEPOD Emergency Theatres', 'Emergency opera
 
 insert into public.workflow_stages (id, workflow_id, name, display_order, colour, delay_threshold_minutes, board_band)
 values
-  ('decision-to-operate', 'cepod-emergency-theatres', 'Decision to Operate', 1, '#0f766e', 30, 'Waiting'),
-  ('sent-for', 'cepod-emergency-theatres', 'Sent For', 2, '#0891b2', 20, 'Sent For'),
-  ('patient-arrived', 'cepod-emergency-theatres', 'Patient Arrived', 3, '#2563eb', 15, 'Arrived'),
+  ('patient-on-list', 'cepod-emergency-theatres', 'Patient on list', 1, '#64748b', 30, 'Waiting'),
+  ('sent-for', 'cepod-emergency-theatres', 'Patient Sent For', 2, '#0891b2', 20, 'Sent For'),
+  ('patient-arrived', 'cepod-emergency-theatres', 'Patient Arrived in Anaesthetic Room', 3, '#2563eb', 15, 'Arrived'),
   ('anaesthetic-started', 'cepod-emergency-theatres', 'Anaesthetic Started', 4, '#7c3aed', 35, 'Anaesthetic'),
-  ('knife-to-skin', 'cepod-emergency-theatres', 'Knife to Skin', 5, '#dc2626', 120, 'Operating'),
-  ('procedure-finished', 'cepod-emergency-theatres', 'Procedure Finished', 6, '#ea580c', 20, 'Operating'),
-  ('out-of-theatre', 'cepod-emergency-theatres', 'Out of Theatre', 7, '#ca8a04', 15, 'Recovery'),
-  ('recovery-ready', 'cepod-emergency-theatres', 'Recovery Ready for Discharge', 8, '#16a34a', 30, 'Recovery'),
-  ('left-recovery', 'cepod-emergency-theatres', 'Left Recovery', 9, '#15803d', 25, 'Ward'),
-  ('returned-to-ward', 'cepod-emergency-theatres', 'Returned to Ward', 10, '#166534', 60, 'Ward');
+  ('patient-in-theatre', 'cepod-emergency-theatres', 'Patient in Theatre', 5, '#0e7490', 15, 'Operating'),
+  ('operation-started', 'cepod-emergency-theatres', 'Operation started', 6, '#dc2626', 120, 'Operating'),
+  ('operation-finished', 'cepod-emergency-theatres', 'Operation finished', 7, '#ea580c', 20, 'Operating'),
+  ('patient-in-recovery', 'cepod-emergency-theatres', 'Patient in Recovery', 8, '#16a34a', 30, 'Recovery'),
+  ('patient-out-of-recovery', 'cepod-emergency-theatres', 'Patient out of Recovery', 9, '#15803d', 25, 'Ward');
 
 insert into public.delay_reasons (id, label)
 values
@@ -271,7 +270,7 @@ values
 
 insert into public.priority_definitions (id, label, target_minutes, colour)
 values
-  ('Immediate', 'Immediate', 30, '#dc2626'),
-  ('Urgent', 'Urgent', 120, '#ea580c'),
-  ('Expedited', 'Expedited', 360, '#ca8a04'),
-  ('Elective', 'Elective', 1440, '#16a34a');
+  ('P1', 'P1', 30, '#dc2626'),
+  ('P2', 'P2', 120, '#facc15'),
+  ('P3', 'P3', 360, '#16a34a'),
+  ('P4', 'P4', 1440, '#2563eb');

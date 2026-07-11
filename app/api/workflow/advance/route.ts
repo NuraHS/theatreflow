@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { advanceWorkflowSchema } from "@/lib/services/schemas";
-import { activeInfrastructureEventIds, getNextStage } from "@/lib/services/workflow-engine";
+import { activeInfrastructureEventIds, getNextStage, getStageByIdOrName } from "@/lib/services/workflow-engine";
 import { getInfrastructureEvents, getWorkflowStages } from "@/lib/repositories/workflow-repository";
 
 export async function POST(request: Request) {
   const payload = advanceWorkflowSchema.parse(await request.json());
-  const supabase = await createServerSupabaseClient();
+  const authSupabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleSupabaseClient() ?? authSupabase;
   const stages = await getWorkflowStages();
-  const nextStage = getNextStage(stages, payload.current_stage_id);
+  const currentStage = getStageByIdOrName(stages, payload.current_stage_id);
+  const nextStage = currentStage ? getNextStage(stages, currentStage.id) : null;
+
+  if (!currentStage) {
+    return NextResponse.json({ error: "Current workflow stage could not be matched." }, { status: 400 });
+  }
 
   if (!nextStage) {
     return NextResponse.json({ error: "Patient is already at the final workflow stage." }, { status: 400 });
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
 
   const {
     data: { user }
-  } = await supabase.auth.getUser();
+  } = authSupabase ? await authSupabase.auth.getUser() : { data: { user: null } };
 
   const { error: patientError } = await supabase
     .from("patients")

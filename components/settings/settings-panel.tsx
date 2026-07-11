@@ -72,9 +72,10 @@ export function SettingsPanel({ stages, delayReasons }: { stages: WorkflowStage[
             <div className="space-y-2">
               <Label htmlFor="priority">Priority definition</Label>
               <Select id="priority">
-                <option>Immediate</option>
-                <option>Urgent</option>
-                <option>Expedited</option>
+                <option>P1</option>
+                <option>P2</option>
+                <option>P3</option>
+                <option>P4</option>
               </Select>
             </div>
             <div className="space-y-2">

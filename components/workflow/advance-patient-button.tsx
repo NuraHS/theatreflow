@@ -7,17 +7,28 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import type { DelayReason, PatientWithStage } from "@/lib/types/domain";
+import type { DelayReason, PatientWithStage, WorkflowStage } from "@/lib/types/domain";
 import { requiresDelayCapture } from "@/lib/services/workflow-engine";
 
-export function AdvancePatientButton({ patient, delayReasons }: { patient: PatientWithStage; delayReasons: DelayReason[] }) {
+export function AdvancePatientButton({
+  patient,
+  delayReasons,
+  nextStage,
+  elapsedMinutes
+}: {
+  patient: PatientWithStage;
+  delayReasons: DelayReason[];
+  nextStage: WorkflowStage | null;
+  elapsedMinutes?: number;
+}) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [delay, setDelay] = React.useState<"yes" | "no" | null>(null);
   const [selectedReasons, setSelectedReasons] = React.useState<string[]>([]);
   const [comments, setComments] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const needsDelay = requiresDelayCapture(patient.elapsed_minutes, patient.stage);
+  const currentElapsedMinutes = elapsedMinutes ?? patient.elapsed_minutes;
+  const needsDelay = requiresDelayCapture(currentElapsedMinutes, patient.stage);
 
   async function advance(reasonIds = selectedReasons, delayComments = comments) {
     setLoading(true);
@@ -48,6 +59,7 @@ export function AdvancePatientButton({ patient, delayReasons }: { patient: Patie
   }
 
   function onPrimaryClick() {
+    if (!nextStage) return;
     if (needsDelay) {
       setOpen(true);
       return;
@@ -61,9 +73,9 @@ export function AdvancePatientButton({ patient, delayReasons }: { patient: Patie
 
   return (
     <>
-      <Button type="button" size="lg" className="w-full" onClick={onPrimaryClick} disabled={loading}>
+      <Button type="button" size="lg" className="w-full" onClick={onPrimaryClick} disabled={loading || !nextStage}>
         <ArrowRight className="h-5 w-5" aria-hidden="true" />
-        {loading ? "Advancing..." : "Advance to Next Stage"}
+        {loading ? "Recording..." : nextStage ? nextStage.name : "Workflow complete"}
       </Button>
 
       {open ? (
@@ -73,7 +85,7 @@ export function AdvancePatientButton({ patient, delayReasons }: { patient: Patie
               <div>
                 <h2 className="text-lg font-bold">Delay capture</h2>
                 <p className="text-sm text-muted-foreground">
-                  {patient.elapsed_minutes} minutes elapsed in {patient.stage.name}. Threshold is {patient.stage.delay_threshold_minutes} minutes.
+                  {currentElapsedMinutes} minutes elapsed in {patient.stage.name}. Threshold is {patient.stage.delay_threshold_minutes} minutes.
                 </p>
               </div>
               <Button type="button" variant="ghost" size="icon" aria-label="Close delay capture" onClick={() => setOpen(false)}>
@@ -126,7 +138,7 @@ export function AdvancePatientButton({ patient, delayReasons }: { patient: Patie
                 disabled={loading || delay === null || (delay === "yes" && selectedReasons.length === 0)}
                 onClick={() => void advance(delay === "yes" ? selectedReasons : [], delay === "yes" ? comments : "")}
               >
-                Record timestamp and advance
+                Record timestamp and mark {nextStage?.name}
               </Button>
             </div>
           </div>

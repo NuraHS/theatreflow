@@ -48,7 +48,7 @@ export function PatientCard({ patient, delayReasons }: { patient: PatientWithSta
           <span>Last timestamp</span>
           <span className="font-semibold">{patient.last_event ? formatClock(patient.last_event.timestamp) : formatClock(patient.created_at)}</span>
         </div>
-        <AdvancePatientButton patient={patient} delayReasons={delayReasons} />
+        <AdvancePatientButton patient={patient} delayReasons={delayReasons} nextStage={null} />
         <details className="rounded-md border bg-background/60 p-3">
           <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
             <QrCode className="h-4 w-4" aria-hidden="true" />

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import type { PatientWithStage, WorkflowBand } from "@/lib/types/domain";
 import { delayClasses } from "@/lib/utils/delay";
 import { cn } from "@/lib/utils/cn";
+import { priorityLabel, priorityTone } from "@/lib/utils/priority";
 
 const bands: WorkflowBand[] = ["Waiting", "Sent For", "Arrived", "Anaesthetic", "Operating", "Recovery", "Ward"];
 
@@ -26,9 +27,7 @@ export function LiveBoard({ patients }: { patients: PatientWithStage[] }) {
                       <p className="font-bold">{patient.hospital_number}</p>
                       <p className="line-clamp-2 text-sm">{patient.procedure}</p>
                     </div>
-                    <Badge tone={patient.delay_status === "red" ? "red" : patient.delay_status === "amber" ? "amber" : "green"}>
-                      {patient.cepod_priority}
-                    </Badge>
+                    <Badge tone={priorityTone(patient.cepod_priority)}>{priorityLabel(patient.cepod_priority)}</Badge>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-2 text-sm">
                     <span className="truncate">{patient.consultant}</span>
