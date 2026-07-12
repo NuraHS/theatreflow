@@ -16,6 +16,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true, demo: true });
   }
 
+  const { data: existing } = await supabase.from("patients").select("operation_date").eq("id", payload.patient_id).single();
+  const movedAt = new Date();
+
   const { error } = await supabase
     .from("patients")
     .update({ operation_date: payload.operation_date })
@@ -28,5 +31,25 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: `${error.message}${schemaHint}` }, { status: 400 });
   }
 
+
+  const fromDate = existing?.operation_date ?? null;
+  const today = localDateKey(movedAt);
+  const movementType = payload.operation_date === today ? "to_cepod" : payload.operation_date > today ? "to_planned" : "rescheduled";
+  if (movementType === "to_planned") {
+    await supabase.from("patients").update({ booking_cohort: "moved_to_planned" }).eq("id", payload.patient_id);
+  }
+  await supabase.from("patient_list_movements").insert({
+    patient_id: payload.patient_id,
+    from_operation_date: fromDate,
+    to_operation_date: payload.operation_date,
+    moved_at: movedAt.toISOString(),
+    movement_type: movementType
+  });
+
   return NextResponse.json({ ok: true });
+}
+
+function localDateKey(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
 }

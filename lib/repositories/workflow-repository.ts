@@ -1,6 +1,6 @@
 import { DEFAULT_DELAY_REASONS, DEFAULT_WORKFLOW_STAGES, DEMO_INFRASTRUCTURE_EVENTS } from "@/lib/constants/workflow";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import type { DelayReason, InfrastructureEvent, Patient, WorkflowEvent, WorkflowStage } from "@/lib/types/domain";
+import type { DelayReason, InfrastructureEvent, Patient, PatientListMovement, WorkflowEvent, WorkflowStage } from "@/lib/types/domain";
 import { getStageByIdOrName } from "@/lib/services/workflow-engine";
 import { getDelayStatus } from "@/lib/utils/delay";
 import { minutesSince } from "@/lib/utils/time";
@@ -58,6 +58,25 @@ export async function getTodaysPatients() {
   });
 }
 
+export async function getActivePatients() {
+  const patients = await getTodaysPatients();
+  const now = new Date();
+  const today = localDateKey(now);
+  const afterSeven = now.getHours() >= 7;
+
+  return patients.filter((patient) => {
+    if (patient.cancelled) return false;
+    if (patient.current_stage !== "patient-out-of-recovery") return true;
+    const completedDate = (patient.completed_at ?? patient.last_event?.timestamp ?? patient.created_at).slice(0, 10);
+    return completedDate === today && !afterSeven;
+  });
+}
+
+function localDateKey(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 export async function getPatients(): Promise<Patient[]> {
   const supabase = createServiceRoleSupabaseClient();
   if (!supabase) return demoData.patients;
@@ -71,7 +90,8 @@ export async function getPatients(): Promise<Patient[]> {
   return data.map((patient) => ({
     ...patient,
     procedure: patient.procedure ?? patient.procedure_name ?? "Not recorded",
-    operation_date: patient.operation_date ?? patient.created_at.slice(0, 10)
+    operation_date: patient.operation_date ?? patient.created_at.slice(0, 10),
+    booking_cohort: patient.booking_cohort ?? ((patient.operation_date ?? patient.created_at.slice(0, 10)) > patient.created_at.slice(0, 10) ? "moved_to_planned" : "booked")
   })) as Patient[];
 }
 
@@ -86,6 +106,14 @@ export async function getWorkflowEvents(): Promise<WorkflowEvent[]> {
 
   if (error || !data) return demoData.events;
   return data as WorkflowEvent[];
+}
+
+export async function getPatientListMovements(): Promise<PatientListMovement[]> {
+  const supabase = createServiceRoleSupabaseClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("patient_list_movements").select("*").order("moved_at", { ascending: true });
+  if (error || !data) return [];
+  return data as PatientListMovement[];
 }
 
 function normaliseCepodStages(stages: WorkflowStage[]) {

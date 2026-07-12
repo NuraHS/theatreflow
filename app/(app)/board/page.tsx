@@ -1,9 +1,9 @@
 import { MonitorUp } from "lucide-react";
 import { LiveBoard } from "@/components/workflow/live-board";
-import { getTodaysPatients } from "@/lib/repositories/workflow-repository";
+import { getActivePatients } from "@/lib/repositories/workflow-repository";
 
 export default async function BoardPage() {
-  const patients = await getTodaysPatients();
+  const patients = await getActivePatients();
 
   return (
     <div className="space-y-5">

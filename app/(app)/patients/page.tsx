@@ -3,11 +3,11 @@ import { CepodWorkflow } from "@/components/workflow/cepod-workflow";
 import { PatientCreateForm } from "@/components/workflow/patient-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDelayReasons, getInfrastructureEvents, getTodaysPatients, getWorkflowStages } from "@/lib/repositories/workflow-repository";
+import { getActivePatients, getDelayReasons, getInfrastructureEvents, getWorkflowStages } from "@/lib/repositories/workflow-repository";
 
 export default async function PatientsPage() {
   const [patients, delayReasons, infrastructureEvents, stages] = await Promise.all([
-    getTodaysPatients(),
+    getActivePatients(),
     getDelayReasons(),
     getInfrastructureEvents(),
     getWorkflowStages()

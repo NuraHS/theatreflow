@@ -33,6 +33,9 @@ export type Patient = {
   current_stage: string;
   cancelled: boolean;
   cancellation_reason: string | null;
+  cancelled_at?: string | null;
+  completed_at?: string | null;
+  booking_cohort?: "booked" | "moved_to_planned";
   workflow_id: string;
 };
 
@@ -72,6 +75,15 @@ export type WorkflowEvent = {
   delay_reason_ids: string[];
   delay_comments: string | null;
   infrastructure_event_ids: string[];
+};
+
+export type PatientListMovement = {
+  id: string;
+  patient_id: string;
+  from_operation_date: string | null;
+  to_operation_date: string;
+  moved_at: string;
+  movement_type: "to_cepod" | "to_planned" | "rescheduled";
 };
 
 export type PatientWithStage = Patient & {

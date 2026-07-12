@@ -15,6 +15,9 @@ const columns: ColumnDef<PatientWithStage>[] = [
   { accessorKey: "consultant", header: "Consultant" },
   { accessorKey: "specialty", header: "Specialty" },
   { accessorKey: "cepod_priority", header: "Priority" },
+  { accessorFn: (row) => row.cancelled ? "Cancelled" : row.completed_at || row.current_stage === "patient-out-of-recovery" ? "Completed" : "Active", id: "status", header: "Status" },
+  { accessorFn: (row) => formatRecordDate(row.cancelled_at ?? row.completed_at), id: "recordedDate", header: "Completed / cancelled" },
+  { accessorFn: (row) => row.cancellation_reason ?? "—", id: "cancellationReason", header: "Cancellation reason" },
   { accessorFn: (row) => row.stage.name, id: "stage", header: "Current Stage" },
   { accessorKey: "elapsed_minutes", header: "Elapsed Minutes" },
   { accessorKey: "delay_status", header: "Delay Status" }
@@ -28,6 +31,9 @@ export function PatientReportTable({ patients }: { patients: PatientWithStage[] 
     consultant: patient.consultant,
     specialty: patient.specialty,
     priority: patient.cepod_priority,
+    status: patient.cancelled ? "Cancelled" : patient.completed_at || patient.current_stage === "patient-out-of-recovery" ? "Completed" : "Active",
+    completed_or_cancelled_at: patient.cancelled_at ?? patient.completed_at ?? "",
+    cancellation_reason: patient.cancellation_reason ?? "",
     current_stage: patient.stage.name,
     elapsed_minutes: patient.elapsed_minutes,
     delay_status: patient.delay_status
@@ -148,4 +154,9 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function formatRecordDate(value?: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

@@ -37,9 +37,12 @@ export async function POST(request: Request) {
     data: { user }
   } = authSupabase ? await authSupabase.auth.getUser() : { data: { user: null } };
 
+  const patientUpdate = nextStage.id === "patient-out-of-recovery"
+    ? { current_stage: nextStage.id, completed_at: timestamp.toISOString() }
+    : { current_stage: nextStage.id };
   const { error: patientError } = await supabase
     .from("patients")
-    .update({ current_stage: nextStage.id })
+    .update(patientUpdate)
     .eq("id", payload.patient_id);
 
   if (patientError) {

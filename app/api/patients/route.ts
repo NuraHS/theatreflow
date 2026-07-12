@@ -10,6 +10,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const created_at = payload.decision_to_operate_time ? new Date(payload.decision_to_operate_time).toISOString() : now;
   const operation_date = payload.operation_date || toDateInputValue(new Date());
+  const booking_cohort: "booked" | "moved_to_planned" = operation_date > toDateInputValue(new Date(created_at)) ? "moved_to_planned" : "booked";
 
   if (!supabase) {
     return NextResponse.json({
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
         current_stage: "patient-on-list",
         cancelled: false,
         cancellation_reason: null,
+        booking_cohort,
         workflow_id: DEFAULT_WORKFLOW_ID
       }
     });
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
     current_stage: "patient-on-list",
     cancelled: false,
     cancellation_reason: null,
+    booking_cohort,
     workflow_id: DEFAULT_WORKFLOW_ID
   };
 
@@ -84,6 +87,7 @@ type PatientInsert = {
   current_stage: string;
   cancelled: boolean;
   cancellation_reason: string | null;
+  booking_cohort: "booked" | "moved_to_planned";
   workflow_id: string;
 };
 
@@ -95,6 +99,11 @@ async function insertPatientWithSchemaFallback(supabase: NonNullable<ReturnType<
   if (firstAttempt.error.message.includes("'procedure_name'") || firstAttempt.error.message.includes("procedure_name")) {
     const withoutProcedureName = omitPatientColumn(patient, "procedure_name");
     return supabase.from("patients").insert(withoutProcedureName).select().single();
+  }
+
+  if (firstAttempt.error.message.includes("booking_cohort")) {
+    const withoutBookingCohort = omitPatientColumn(patient, "booking_cohort");
+    return supabase.from("patients").insert(withoutBookingCohort).select().single();
   }
 
   if (firstAttempt.error.message.includes("'operation_date'") || firstAttempt.error.message.includes("operation_date")) {

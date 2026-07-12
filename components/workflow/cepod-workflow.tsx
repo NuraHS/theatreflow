@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Clock, GripVertical, QrCode, Search, UserRound } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, GripVertical, QrCode, Search, UserRound, XCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { AdvancePatientButton } from "@/components/workflow/advance-patient-button";
@@ -10,12 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { DelayReason, PatientWithStage, WorkflowStage } from "@/lib/types/domain";
 import { getNextStage } from "@/lib/services/workflow-engine";
 import { cn } from "@/lib/utils/cn";
 import { getDelayStatus } from "@/lib/utils/delay";
 import { priorityLabel, priorityRowClasses, priorityTone } from "@/lib/utils/priority";
-import { formatClock } from "@/lib/utils/time";
 
 export function CepodWorkflow({
   patients,
@@ -396,6 +396,26 @@ function ExpandedPatientCard({
   onMoveToCepod: () => void;
   onMoveToPlanned: () => void;
 }) {
+  const router = useRouter();
+  const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState("");
+  const [cancelling, setCancelling] = React.useState(false);
+
+  async function cancelPatient() {
+    setCancelling(true);
+    const response = await fetch("/api/patients/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: patient.id, reason: cancelReason })
+    });
+    const result = (await response.json()) as { error?: string; demo?: boolean };
+    setCancelling(false);
+    if (!response.ok) return toast.error(result.error ?? "Unable to cancel case");
+    toast.success(result.demo ? "Demo cancellation recorded." : "Case cancelled and retained in the record.");
+    setCancelOpen(false);
+    router.refresh();
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -425,6 +445,10 @@ function ExpandedPatientCard({
             </Button>
           </>
         )}
+        <Button type="button" variant="destructive" className="w-full" onClick={() => setCancelOpen(true)}>
+          <XCircle className="h-4 w-4" aria-hidden="true" />
+          Cancel case
+        </Button>
         <details className="rounded-md border bg-background/60 p-3">
           <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
             <QrCode className="h-4 w-4" aria-hidden="true" />
@@ -435,6 +459,20 @@ function ExpandedPatientCard({
           </div>
         </details>
       </div>
+      {cancelOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-cyan-950/40 p-3 sm:items-center sm:justify-center">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby={`cancel-title-${patient.id}`}>
+            <h2 id={`cancel-title-${patient.id}`} className="text-lg font-bold">Cancel this case?</h2>
+            <p className="mt-1 text-sm text-muted-foreground">The patient will leave the active list, but the cancellation and reason remain in reports.</p>
+            <label htmlFor={`cancel-reason-${patient.id}`} className="mt-4 block text-sm font-semibold">Reason for cancellation</label>
+            <Textarea id={`cancel-reason-${patient.id}`} className="mt-2" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="For example: operation no longer needed" autoFocus />
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setCancelOpen(false)}>Keep case</Button>
+              <Button type="button" variant="destructive" disabled={cancelling || cancelReason.trim().length < 3} onClick={() => void cancelPatient()}>{cancelling ? "Recording..." : "Confirm cancellation"}</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -485,13 +523,18 @@ function Info({ label, value, className }: { label: string; value: string; class
   return (
     <div className={className}>
       <p className="text-xs font-semibold uppercase tracking-normal opacity-75">{label}</p>
-      <p className="truncate font-semibold">{value}</p>
+      <p className="break-words font-semibold">{value}</p>
     </div>
   );
 }
 
 function stageStartedClock(patient: PatientWithStage) {
-  return formatClock(patient.last_event?.timestamp ?? patient.created_at);
+  const date = new Date(patient.last_event?.timestamp ?? patient.created_at);
+  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(date);
+  const month = new Intl.DateTimeFormat("en-GB", { month: "long" }).format(date);
+  const time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  const day = date.getDate();
+  return `${weekday} ${day}${ordinalSuffix(day)} ${month}, ${time}`;
 }
 
 function getOperationDate(patient: PatientWithStage) {
