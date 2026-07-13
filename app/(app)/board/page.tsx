@@ -2,6 +2,9 @@ import { MonitorUp } from "lucide-react";
 import { LiveBoard } from "@/components/workflow/live-board";
 import { getActivePatients } from "@/lib/repositories/workflow-repository";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function BoardPage() {
   const patients = await getActivePatients();
 

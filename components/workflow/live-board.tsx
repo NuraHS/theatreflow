@@ -1,6 +1,11 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import type { PatientWithStage, WorkflowBand } from "@/lib/types/domain";
 import { delayClasses } from "@/lib/utils/delay";
 import { cn } from "@/lib/utils/cn";
@@ -9,6 +14,15 @@ import { priorityLabel, priorityTone } from "@/lib/utils/priority";
 const bands: WorkflowBand[] = ["Waiting", "Sent For", "Arrived", "Anaesthetic", "Operating", "Recovery", "Ward"];
 
 export function LiveBoard({ patients }: { patients: PatientWithStage[] }) {
+  const router = useRouter();
+  const refreshBoard = React.useCallback(() => router.refresh(), [router]);
+  useRealtimeWorkflow(refreshBoard);
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(refreshBoard, 15_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshBoard]);
+
   return (
     <div className="grid gap-3 xl:grid-cols-7">
       {bands.map((band) => {
