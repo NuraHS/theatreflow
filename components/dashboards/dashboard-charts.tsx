@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Activity, CalendarDays, Clock3, Info, RefreshCw, RotateCcw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { SUPPORTED_SPECIALTIES } from "@/lib/constants/clinical-teams";
 import type { DelayReason, PatientWithStage, WorkflowEvent } from "@/lib/types/domain";
 
@@ -31,6 +33,9 @@ const delayStages = [
 type Props = { patients: PatientWithStage[]; events: WorkflowEvent[]; delayReasons: DelayReason[] };
 
 export function DashboardCharts({ patients, events, delayReasons }: Props) {
+  const router = useRouter();
+  const refreshDashboard = React.useCallback(() => router.refresh(), [router]);
+  useRealtimeWorkflow(refreshDashboard);
   const today = localDateKey(new Date());
   const [startDate, setStartDate] = React.useState(today);
   const [endDate, setEndDate] = React.useState(today);
@@ -40,11 +45,12 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
   const [now, setNow] = React.useState(() => new Date());
 
   React.useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 3_600_000); return () => window.clearInterval(timer); }, []);
+  React.useEffect(() => { const timer = window.setInterval(refreshDashboard, 15_000); return () => window.clearInterval(timer); }, [refreshDashboard]);
 
   const range = normaliseRange(startDate, endDate);
   const specialtyPatients = patients.filter((patient) => specialty === "all" || patient.specialty === specialty);
   const patientIds = new Set(specialtyPatients.map((patient) => patient.id));
-  const scheduledPatients = specialtyPatients.filter((patient) => inDateRange(patient.operation_date ?? patient.created_at, range));
+  const scheduledPatients = specialtyPatients.filter((patient) => !patient.cancelled && inDateRange(patient.operation_date ?? patient.created_at, range));
   const rangeEvents = events.filter((event) => patientIds.has(event.patient_id) && inDateRange(event.timestamp, range));
   const bookedPatients = scheduledPatients.filter((patient) => patient.booking_cohort !== "moved_to_planned");
   const movedPatients = scheduledPatients.filter((patient) => patient.booking_cohort === "moved_to_planned");
@@ -54,8 +60,8 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
   const waitingPatients = scheduledPatients.filter((patient) => !patient.cancelled && ["Waiting", "Sent For", "Arrived"].includes(patient.stage.board_band));
   const delayedPatientIds = new Set(rangeEvents.filter((event) => event.delay_reason_ids.length).map((event) => event.patient_id));
   const delayedPatients = dashboardPatients.filter((patient) => delayedPatientIds.has(patient.id));
-  const awaitingSurgeryPatients = scheduledPatients.filter((patient) => !patient.cancelled && ["sent-for", "patient-arrived", "anaesthetic-started", "patient-in-theatre", "operation-started"].includes(patient.current_stage));
-  const completedSurgeryPatients = scheduledPatients.filter((patient) => !patient.cancelled && ["operation-finished", "patient-in-recovery"].includes(patient.current_stage));
+  const awaitingSurgeryPatients = scheduledPatients.filter((patient) => ["patient-on-list", "sent-for", "patient-arrived", "anaesthetic-started", "patient-in-theatre", "operation-started"].includes(patient.current_stage));
+  const completedSurgeryPatients = scheduledPatients.filter((patient) => ["operation-finished", "patient-in-recovery"].includes(patient.current_stage));
   const outcomes = buildPriorityOutcomes([
     ["Total booked", scheduledPatients],
     ["Awaiting surgery", awaitingSurgeryPatients],
