@@ -68,10 +68,16 @@ export function PatientCreateForm() {
   }, [consultantOptions, form, operationOptions, operationSelection, selectedSpecialty]);
 
   async function onSubmit(values: CreatePatientInput) {
+    const payload = {
+      ...values,
+      decision_to_operate_time: values.decision_to_operate_time
+        ? new Date(values.decision_to_operate_time).toISOString()
+        : ""
+    };
     const response = await fetch("/api/patients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values)
+      body: JSON.stringify(payload)
     });
     const result = (await response.json()) as { error?: string; demo?: boolean };
 

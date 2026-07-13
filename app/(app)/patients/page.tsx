@@ -5,6 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActivePatients, getDelayReasons, getInfrastructureEvents, getWorkflowStages } from "@/lib/repositories/workflow-repository";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function PatientsPage() {
   const [patients, delayReasons, infrastructureEvents, stages] = await Promise.all([
     getActivePatients(),

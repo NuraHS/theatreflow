@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DelayReason, PatientWithStage, WorkflowStage } from "@/lib/types/domain";
 import { getNextStage } from "@/lib/services/workflow-engine";
+import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { cn } from "@/lib/utils/cn";
 import { getDelayStatus } from "@/lib/utils/delay";
 import { priorityLabel, priorityRowClasses, priorityTone } from "@/lib/utils/priority";
@@ -29,6 +30,8 @@ export function CepodWorkflow({
   todayIso: string;
 }) {
   const router = useRouter();
+  const refreshPatients = React.useCallback(() => router.refresh(), [router]);
+  useRealtimeWorkflow(refreshPatients);
   const [query, setQuery] = React.useState("");
   const [expandedId, setExpandedId] = React.useState("");
   const [orderedIds, setOrderedIds] = React.useState(() => patients.map((patient) => patient.id));
