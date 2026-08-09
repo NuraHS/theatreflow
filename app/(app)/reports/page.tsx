@@ -1,8 +1,10 @@
 import { FileDown } from "lucide-react";
 import { PatientReportTable } from "@/components/reports/patient-report-table";
 import { getDelayReasons, getTodaysPatients, getWorkflowEvents } from "@/lib/repositories/workflow-repository";
+import { requirePagePermission } from "@/lib/services/access-control";
 
 export default async function ReportsPage() {
+  await requirePagePermission("exportReports");
   const [patients, events, delayReasons] = await Promise.all([getTodaysPatients(), getWorkflowEvents(), getDelayReasons()]);
 
   return (

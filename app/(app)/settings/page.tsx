@@ -1,8 +1,10 @@
 import { Settings } from "lucide-react";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { getDelayReasons, getWorkflowStages } from "@/lib/repositories/workflow-repository";
+import { requirePagePermission } from "@/lib/services/access-control";
 
 export default async function SettingsPage() {
+  await requirePagePermission("manageSettings");
   const [stages, delayReasons] = await Promise.all([getWorkflowStages(), getDelayReasons()]);
 
   return (

@@ -27,6 +27,8 @@ export const demoPatients: Patient[] = [
     unresolved_at: null,
     unresolved_from_stage: null,
     reconciliation_reviewed_at: null,
+    theatre_id: "33333333-3333-4333-8333-333333333301",
+    recovery_area_id: "22222222-2222-4222-8222-222222222201",
     workflow_id: DEFAULT_WORKFLOW_ID
   },
   {
@@ -46,6 +48,8 @@ export const demoPatients: Patient[] = [
     unresolved_at: null,
     unresolved_from_stage: null,
     reconciliation_reviewed_at: null,
+    theatre_id: "33333333-3333-4333-8333-333333333302",
+    recovery_area_id: "22222222-2222-4222-8222-222222222201",
     workflow_id: DEFAULT_WORKFLOW_ID
   },
   {
@@ -65,6 +69,8 @@ export const demoPatients: Patient[] = [
     unresolved_at: null,
     unresolved_from_stage: null,
     reconciliation_reviewed_at: null,
+    theatre_id: "33333333-3333-4333-8333-333333333306",
+    recovery_area_id: "22222222-2222-4222-8222-222222222202",
     workflow_id: DEFAULT_WORKFLOW_ID
   },
   {
@@ -84,6 +90,8 @@ export const demoPatients: Patient[] = [
     unresolved_at: null,
     unresolved_from_stage: null,
     reconciliation_reviewed_at: null,
+    theatre_id: "33333333-3333-4333-8333-333333333301",
+    recovery_area_id: "22222222-2222-4222-8222-222222222201",
     workflow_id: DEFAULT_WORKFLOW_ID
   }
 ];

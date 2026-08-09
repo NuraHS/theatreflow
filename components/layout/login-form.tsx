@@ -24,6 +24,7 @@ export function LoginForm() {
 
     if (!supabase) {
       toast.info("Supabase is not configured. Opening demo mode.");
+      setLoading(false);
       router.push("/patients");
       return;
     }
@@ -36,7 +37,8 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/patients");
+    const nextPath = new URLSearchParams(window.location.search).get("next");
+    router.push(nextPath?.startsWith("/") ? nextPath : "/patients");
     router.refresh();
   }
 
@@ -47,7 +49,7 @@ export function LoginForm() {
           <Activity className="h-6 w-6" aria-hidden="true" />
         </div>
         <CardTitle className="text-2xl">Sign in to Theatreflow</CardTitle>
-        <CardDescription>Use Supabase authentication in production. Without credentials this app runs in local demo mode.</CardDescription>
+        <CardDescription>Use the account issued by your Theatreflow administrator. Access is limited by your role, theatre suite and assigned theatres.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">

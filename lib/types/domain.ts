@@ -1,10 +1,65 @@
 export type UserRole =
   | "administrator"
+  | "theatre_coordinator"
+  | "service_manager"
   | "manager"
   | "clinical_lead"
+  | "theatre_manager"
+  | "divisional_leadership"
   | "consultant"
   | "theatre_staff"
   | "read_only_auditor";
+
+export type TheatreSuite = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  display_order: number;
+};
+
+export type Theatre = {
+  id: string;
+  suite_id: string;
+  default_recovery_area_id: string | null;
+  code: string;
+  name: string;
+  active: boolean;
+  display_order: number;
+};
+
+export type RecoveryArea = {
+  id: string;
+  suite_id: string;
+  code: string;
+  name: string;
+  capacity: number | null;
+  active: boolean;
+  display_order: number;
+};
+
+export type TheatreConfiguration = {
+  suites: TheatreSuite[];
+  theatres: Theatre[];
+  recovery_areas: RecoveryArea[];
+};
+
+export type UserProfile = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  job_title: string | null;
+  role: UserRole;
+  active: boolean;
+  primary_suite_id: string | null;
+  suite_ids: string[];
+  theatre_ids: string[];
+};
+
+export type CurrentUserAccess = UserProfile & {
+  authenticated: boolean;
+  all_theatres: boolean;
+};
 
 export type CepodPriority = "P1" | "P2" | "P3" | "P4" | "Immediate" | "Urgent" | "Expedited" | "Elective";
 
@@ -40,6 +95,8 @@ export type Patient = {
   unresolved_from_stage: string | null;
   reconciliation_reviewed_at: string | null;
   booking_cohort?: "booked" | "moved_to_planned";
+  theatre_id: string | null;
+  recovery_area_id: string | null;
   workflow_id: string;
 };
 

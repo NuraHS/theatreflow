@@ -2,6 +2,10 @@ create extension if not exists "pgcrypto";
 
 create type public.user_role as enum (
   'administrator',
+  'theatre_coordinator',
+  'service_manager',
+  'theatre_manager',
+  'divisional_leadership',
   'manager',
   'clinical_lead',
   'consultant',

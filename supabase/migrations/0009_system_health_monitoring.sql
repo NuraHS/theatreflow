@@ -1,5 +1,71 @@
 begin;
 
+-- Some early Theatreflow installations were created with the repair/setup script,
+-- which did not include the authentication profile objects from migration 0001.
+-- Keep this migration self-contained so it can be applied safely to either shape.
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role text not null default 'theatre_staff',
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles
+  add column if not exists full_name text,
+  add column if not exists role text,
+  add column if not exists created_at timestamptz not null default now();
+
+create table if not exists public.audit_log (
+  id bigserial primary key,
+  table_name text not null,
+  row_id text not null,
+  action text not null,
+  user_id uuid,
+  changed_at timestamptz not null default now(),
+  old_value jsonb,
+  new_value jsonb
+);
+
+create or replace function public.current_theatreflow_role_text()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select role::text from public.profiles where id = auth.uid()), 'theatre_staff');
+$$;
+
+create or replace function public.is_theatreflow_administrator()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_theatreflow_role_text() = 'administrator';
+$$;
+
+create or replace function public.write_audit_log()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.audit_log(table_name, row_id, action, user_id, old_value, new_value)
+  values (
+    tg_table_name,
+    coalesce(new.id::text, old.id::text),
+    tg_op,
+    auth.uid(),
+    case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
+    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
+  );
+  return coalesce(new, old);
+end;
+$$;
+
 create table if not exists public.system_incidents (
   id uuid primary key default gen_random_uuid(),
   occurred_at timestamptz not null,
@@ -57,25 +123,33 @@ alter table public.system_health_snapshots enable row level security;
 alter table public.system_maintenance_events enable row level security;
 alter table public.theatreflow_schema_migrations enable row level security;
 
+drop policy if exists "system incidents admin read" on public.system_incidents;
+drop policy if exists "system incidents admin write" on public.system_incidents;
+drop policy if exists "system snapshots admin read" on public.system_health_snapshots;
+drop policy if exists "system snapshots admin insert" on public.system_health_snapshots;
+drop policy if exists "system maintenance admin read" on public.system_maintenance_events;
+drop policy if exists "system maintenance admin write" on public.system_maintenance_events;
+drop policy if exists "schema migrations admin read" on public.theatreflow_schema_migrations;
+
 create policy "system incidents admin read" on public.system_incidents
-for select using (public.has_any_role(array['administrator']::public.user_role[]));
+for select using (public.is_theatreflow_administrator());
 create policy "system incidents admin write" on public.system_incidents
-for all using (public.has_any_role(array['administrator']::public.user_role[]))
-with check (public.has_any_role(array['administrator']::public.user_role[]));
+for all using (public.is_theatreflow_administrator())
+with check (public.is_theatreflow_administrator());
 
 create policy "system snapshots admin read" on public.system_health_snapshots
-for select using (public.has_any_role(array['administrator']::public.user_role[]));
+for select using (public.is_theatreflow_administrator());
 create policy "system snapshots admin insert" on public.system_health_snapshots
-for insert with check (public.has_any_role(array['administrator']::public.user_role[]));
+for insert with check (public.is_theatreflow_administrator());
 
 create policy "system maintenance admin read" on public.system_maintenance_events
-for select using (public.has_any_role(array['administrator']::public.user_role[]));
+for select using (public.is_theatreflow_administrator());
 create policy "system maintenance admin write" on public.system_maintenance_events
-for all using (public.has_any_role(array['administrator']::public.user_role[]))
-with check (public.has_any_role(array['administrator']::public.user_role[]));
+for all using (public.is_theatreflow_administrator())
+with check (public.is_theatreflow_administrator());
 
 create policy "schema migrations admin read" on public.theatreflow_schema_migrations
-for select using (public.has_any_role(array['administrator']::public.user_role[]));
+for select using (public.is_theatreflow_administrator());
 
 create or replace function public.get_theatreflow_database_metrics()
 returns jsonb
@@ -94,9 +168,11 @@ $$;
 revoke all on function public.get_theatreflow_database_metrics() from public;
 grant execute on function public.get_theatreflow_database_metrics() to authenticated, service_role;
 
+drop trigger if exists system_incidents_audit on public.system_incidents;
 create trigger system_incidents_audit after insert or update on public.system_incidents
 for each row execute function public.write_audit_log();
 
+drop trigger if exists system_maintenance_events_audit on public.system_maintenance_events;
 create trigger system_maintenance_events_audit after insert or update on public.system_maintenance_events
 for each row execute function public.write_audit_log();
 

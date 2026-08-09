@@ -1,11 +1,13 @@
 import { BarChart3 } from "lucide-react";
 import { DashboardCharts } from "@/components/dashboards/dashboard-charts";
 import { getDelayReasons, getTodaysPatients, getWorkflowEvents } from "@/lib/repositories/workflow-repository";
+import { requirePagePermission } from "@/lib/services/access-control";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function DashboardsPage() {
+  await requirePagePermission("viewDashboards");
   const [patients, events, delayReasons] = await Promise.all([
     getTodaysPatients(),
     getWorkflowEvents(),

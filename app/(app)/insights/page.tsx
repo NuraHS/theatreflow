@@ -1,8 +1,10 @@
 import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getTodaysPatients, getWorkflowEvents } from "@/lib/repositories/workflow-repository";
+import { requirePagePermission } from "@/lib/services/access-control";
 
 export default async function InsightsPage() {
+  await requirePagePermission("viewDashboards");
   const [patients, events] = await Promise.all([getTodaysPatients(), getWorkflowEvents()]);
   const delayed = patients.filter((patient) => patient.delay_status !== "green").length;
   const recoveryDelays = events.filter((event) => event.delay_reason_ids.includes("recovery-full")).length;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { canAccessPatient, hasPermission } from "@/lib/services/access-control";
 
 const movePatientListSchema = z.object({
   patient_id: z.string().min(1),
@@ -9,6 +10,8 @@ const movePatientListSchema = z.object({
 
 export async function PATCH(request: Request) {
   const payload = movePatientListSchema.parse(await request.json());
+  if (!(await hasPermission("advanceWorkflow"))) return NextResponse.json({ error: "Your role cannot move patient lists." }, { status: 403 });
+  if (!(await canAccessPatient(payload.patient_id))) return NextResponse.json({ error: "You do not have access to this patient's theatre." }, { status: 403 });
   const authSupabase = await createServerSupabaseClient();
   const supabase = createServiceRoleSupabaseClient() ?? authSupabase;
 

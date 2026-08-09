@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { canAccessPatient, hasPermission } from "@/lib/services/access-control";
 
 const reconcilePatientSchema = z.object({
   patient_id: z.string().min(1),
@@ -12,6 +13,8 @@ export async function PATCH(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "A valid reconciliation action is required." }, { status: 400 });
   }
+  if (!(await hasPermission("advanceWorkflow"))) return NextResponse.json({ error: "Your role cannot reconcile patients." }, { status: 403 });
+  if (!(await canAccessPatient(parsed.data.patient_id))) return NextResponse.json({ error: "You do not have access to this patient's theatre." }, { status: 403 });
 
   const authSupabase = await createServerSupabaseClient();
   const supabase = createServiceRoleSupabaseClient() ?? authSupabase;

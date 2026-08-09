@@ -4,16 +4,21 @@ import { PatientCreateForm } from "@/components/workflow/patient-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActivePatients, getDelayReasons, getInfrastructureEvents, getWorkflowStages } from "@/lib/repositories/workflow-repository";
+import { getTheatreConfiguration } from "@/lib/repositories/theatre-repository";
+import { hasPermission, requirePagePermission } from "@/lib/services/access-control";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function PatientsPage() {
-  const [patients, delayReasons, infrastructureEvents, stages] = await Promise.all([
+  await requirePagePermission("viewPatients");
+  const [patients, delayReasons, infrastructureEvents, stages, locations, canCreatePatients] = await Promise.all([
     getActivePatients(),
     getDelayReasons(),
     getInfrastructureEvents(),
-    getWorkflowStages()
+    getWorkflowStages(),
+    getTheatreConfiguration(),
+    hasPermission("createPatients")
   ]);
   const activeInfrastructure = infrastructureEvents.filter((event) => event.active);
   const today = new Date().toISOString().slice(0, 10);
@@ -62,7 +67,7 @@ export default async function PatientsPage() {
         </Card>
       ) : null}
 
-      <PatientCreateForm />
+      {canCreatePatients ? <PatientCreateForm suites={locations.suites} theatres={locations.theatres} recoveryAreas={locations.recovery_areas} /> : null}
       <CepodWorkflow patients={patients} stages={stages} delayReasons={delayReasons} todayIso={new Date().toISOString()} />
     </div>
   );

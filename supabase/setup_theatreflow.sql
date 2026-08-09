@@ -332,8 +332,131 @@ as $$
   );
 $$;
 
+-- Authentication profiles and location hierarchy used by the on-premises app.
+do $$
+begin
+  if exists (
+    select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
+    where n.nspname = 'public' and t.typname = 'user_role'
+  ) then
+    alter type public.user_role add value if not exists 'theatre_coordinator';
+    alter type public.user_role add value if not exists 'service_manager';
+    alter type public.user_role add value if not exists 'theatre_manager';
+    alter type public.user_role add value if not exists 'divisional_leadership';
+  end if;
+end
+$$;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role text not null default 'theatre_staff',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.theatre_suites (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  name text not null unique,
+  active boolean not null default true,
+  display_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.recovery_areas (
+  id uuid primary key default gen_random_uuid(),
+  suite_id uuid not null references public.theatre_suites(id) on delete restrict,
+  code text not null unique,
+  name text not null,
+  capacity integer,
+  active boolean not null default true,
+  display_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (suite_id, name)
+);
+
+create table if not exists public.theatres (
+  id uuid primary key default gen_random_uuid(),
+  suite_id uuid not null references public.theatre_suites(id) on delete restrict,
+  default_recovery_area_id uuid references public.recovery_areas(id) on delete set null,
+  code text not null unique,
+  name text not null,
+  active boolean not null default true,
+  display_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (suite_id, name)
+);
+
+insert into public.theatre_suites (code, name, display_order)
+values ('st-james', 'St James''', 1), ('atkinson-morley', 'Atkinson Morley', 2), ('gynae', 'Gynae', 3)
+on conflict (code) do update set name = excluded.name, active = true, display_order = excluded.display_order;
+
+insert into public.recovery_areas (suite_id, code, name, capacity, display_order)
+select s.id, s.code || '-recovery', s.name || ' Recovery', case when s.code = 'st-james' then 8 else 6 end, 1
+from public.theatre_suites s
+where s.code in ('st-james', 'atkinson-morley', 'gynae')
+on conflict (code) do update set suite_id = excluded.suite_id, name = excluded.name, capacity = excluded.capacity, active = true;
+
+insert into public.theatres (suite_id, default_recovery_area_id, code, name, display_order)
+select s.id, r.id, s.code || '-theatre-' || number::text, 'Theatre ' || number::text, number
+from public.theatre_suites s
+join public.recovery_areas r on r.suite_id = s.id
+cross join generate_series(1, 5) number
+where s.code = 'st-james'
+   or (s.code in ('atkinson-morley', 'gynae') and number <= 3)
+on conflict (code) do update set suite_id = excluded.suite_id, default_recovery_area_id = excluded.default_recovery_area_id, active = true, display_order = excluded.display_order;
+
+alter table public.profiles
+  add column if not exists email text,
+  add column if not exists job_title text,
+  add column if not exists active boolean not null default true,
+  add column if not exists primary_suite_id uuid references public.theatre_suites(id) on delete set null,
+  add column if not exists updated_at timestamptz not null default now();
+
+create table if not exists public.profile_suite_access (
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  suite_id uuid not null references public.theatre_suites(id) on delete cascade,
+  can_manage boolean not null default false,
+  created_at timestamptz not null default now(),
+  primary key (profile_id, suite_id)
+);
+
+create table if not exists public.profile_theatre_access (
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  theatre_id uuid not null references public.theatres(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (profile_id, theatre_id)
+);
+
+alter table public.patients
+  add column if not exists theatre_id uuid references public.theatres(id) on delete restrict,
+  add column if not exists recovery_area_id uuid references public.recovery_areas(id) on delete restrict;
+
+create or replace function public.handle_new_theatreflow_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, email, full_name, role)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data ->> 'full_name', split_part(coalesce(new.email, 'New user'), '@', 1)), 'theatre_staff')
+  on conflict (id) do update set email = excluded.email, updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_theatreflow on auth.users;
+create trigger on_auth_user_created_theatreflow after insert or update of email on auth.users
+for each row execute function public.handle_new_theatreflow_user();
+
+insert into public.profiles (id, email, full_name, role)
+select u.id, u.email, coalesce(u.raw_user_meta_data ->> 'full_name', split_part(coalesce(u.email, 'Existing user'), '@', 1)), 'theatre_staff'
+from auth.users u
+on conflict (id) do update set email = excluded.email;
+
 insert into public.theatreflow_schema_migrations (version, name)
 values ('0009', 'System health monitoring and technical incident audit')
+on conflict (version) do update set name = excluded.name;
+
+insert into public.theatreflow_schema_migrations (version, name)
+values ('0010', 'Authentication roles, theatre suites and recovery access')
 on conflict (version) do update set name = excluded.name;
 
 delete from public.workflow_stages

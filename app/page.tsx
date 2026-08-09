@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
+import { getCurrentUserRole, getRoleHome } from "@/lib/services/access-control";
 
-export default function Home() {
-  redirect("/patients");
+export default async function Home() {
+  redirect(getRoleHome(await getCurrentUserRole()));
 }

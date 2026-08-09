@@ -18,8 +18,9 @@ import {
   SUPPORTED_SPECIALTIES
 } from "@/lib/constants/clinical-teams";
 import { createPatientSchema, type CreatePatientInput } from "@/lib/services/schemas";
+import type { RecoveryArea, Theatre, TheatreSuite } from "@/lib/types/domain";
 
-export function PatientCreateForm() {
+export function PatientCreateForm({ suites, theatres, recoveryAreas }: { suites: TheatreSuite[]; theatres: Theatre[]; recoveryAreas: RecoveryArea[] }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [operationSelection, setOperationSelection] = React.useState("");
@@ -33,15 +34,25 @@ export function PatientCreateForm() {
       specialty: "",
       procedure: "",
       cepod_priority: "P2",
+      theatre_id: theatres[0]?.id ?? "",
+      recovery_area_id: theatres[0]?.default_recovery_area_id ?? "",
       operation_date: defaultOperationDate,
       decision_to_operate_time: ""
     }
   });
   const selectedSpecialty = form.watch("specialty");
   const selectedProcedure = form.watch("procedure");
+  const selectedTheatreId = form.watch("theatre_id");
   const consultantOptions = React.useMemo(() => getConsultantsForSpecialty(selectedSpecialty), [selectedSpecialty]);
   const operationOptions = React.useMemo(() => getOperationsForSpecialty(selectedSpecialty), [selectedSpecialty]);
   const customOperation = operationSelection === FREE_TEXT_OPERATION;
+
+  React.useEffect(() => {
+    const theatre = theatres.find((item) => item.id === selectedTheatreId);
+    if (theatre?.default_recovery_area_id) {
+      form.setValue("recovery_area_id", theatre.default_recovery_area_id, { shouldValidate: true });
+    }
+  }, [form, selectedTheatreId, theatres]);
 
   React.useEffect(() => {
     const currentConsultant = form.getValues("consultant");
@@ -94,6 +105,8 @@ export function PatientCreateForm() {
       specialty: "",
       procedure: "",
       cepod_priority: "P2",
+      theatre_id: theatres[0]?.id ?? "",
+      recovery_area_id: theatres[0]?.default_recovery_area_id ?? "",
       operation_date: toDateInputValue(new Date()),
       decision_to_operate_time: ""
     });
@@ -199,6 +212,24 @@ export function PatientCreateForm() {
                 <option value="P2">P2: Urgent</option>
                 <option value="P3">P3: Expedited</option>
                 <option value="P4">P4: Elective</option>
+              </Select>
+            </Field>
+            <Field label="Theatre" error={form.formState.errors.theatre_id?.message}>
+              <Select {...form.register("theatre_id")}>
+                <option value="">Select theatre</option>
+                {suites.map((suite) => (
+                  <optgroup key={suite.id} label={suite.name}>
+                    {theatres.filter((theatre) => theatre.suite_id === suite.id).map((theatre) => (
+                      <option key={theatre.id} value={theatre.id}>{suite.name} · {theatre.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Recovery area">
+              <Select {...form.register("recovery_area_id")}>
+                <option value="">Assign automatically from theatre</option>
+                {recoveryAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
               </Select>
             </Field>
             <Field label="Operation date">

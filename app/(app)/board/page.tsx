@@ -1,12 +1,15 @@
 import { MonitorUp } from "lucide-react";
 import { LiveBoard } from "@/components/workflow/live-board";
 import { getActivePatients } from "@/lib/repositories/workflow-repository";
+import { getTheatreConfiguration } from "@/lib/repositories/theatre-repository";
+import { requirePagePermission } from "@/lib/services/access-control";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function BoardPage() {
-  const patients = await getActivePatients();
+  await requirePagePermission("viewLiveBoard");
+  const [patients, locations] = await Promise.all([getActivePatients(), getTheatreConfiguration()]);
 
   return (
     <div className="space-y-5">
@@ -20,7 +23,7 @@ export default async function BoardPage() {
         </div>
         <p className="text-sm font-semibold text-muted-foreground">Green, amber and red reflect each stage threshold.</p>
       </section>
-      <LiveBoard patients={patients} />
+      <LiveBoard patients={patients} locations={locations} />
     </div>
   );
 }

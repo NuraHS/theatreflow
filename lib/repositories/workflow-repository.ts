@@ -1,4 +1,7 @@
 import { DEFAULT_DELAY_REASONS, DEFAULT_WORKFLOW_STAGES, DEMO_INFRASTRUCTURE_EVENTS } from "@/lib/constants/workflow";
+import { DEFAULT_THEATRE_CONFIGURATION } from "@/lib/constants/theatre-locations";
+import { getTheatreConfiguration } from "@/lib/repositories/theatre-repository";
+import { getCurrentUserAccess, isRolePermissionEnforced } from "@/lib/services/access-control";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { DelayReason, InfrastructureEvent, Patient, PatientListMovement, WorkflowEvent, WorkflowStage } from "@/lib/types/domain";
 import { getStageByIdOrName } from "@/lib/services/workflow-engine";
@@ -99,7 +102,7 @@ export async function getTodaysPatients() {
     );
   }
 
-  return enrichedPatients;
+  return scopePatientsForCurrentUser(enrichedPatients);
 }
 
 export async function getActivePatients() {
@@ -139,7 +142,9 @@ export async function getPatients(): Promise<Patient[]> {
     unresolved: patient.unresolved ?? false,
     unresolved_at: patient.unresolved_at ?? null,
     unresolved_from_stage: patient.unresolved_from_stage ?? null,
-    reconciliation_reviewed_at: patient.reconciliation_reviewed_at ?? null
+    reconciliation_reviewed_at: patient.reconciliation_reviewed_at ?? null,
+    theatre_id: Object.prototype.hasOwnProperty.call(patient, "theatre_id") ? patient.theatre_id ?? null : DEFAULT_THEATRE_CONFIGURATION.theatres[0]?.id ?? null,
+    recovery_area_id: Object.prototype.hasOwnProperty.call(patient, "recovery_area_id") ? patient.recovery_area_id ?? null : DEFAULT_THEATRE_CONFIGURATION.recovery_areas[0]?.id ?? null
   })) as Patient[];
 }
 
@@ -153,7 +158,14 @@ export async function getWorkflowEvents(): Promise<WorkflowEvent[]> {
     .order("timestamp", { ascending: true });
 
   if (error || !data) return demoData.events;
-  return data as WorkflowEvent[];
+  if (!isRolePermissionEnforced()) return data as WorkflowEvent[];
+  const access = await getCurrentUserAccess();
+  if (access.all_theatres) return data as WorkflowEvent[];
+  const configuration = await getTheatreConfiguration();
+  const allowedTheatreIds = new Set(configuration.theatres.map((theatre) => theatre.id));
+  const { data: patientLocations } = await supabase.from("patients").select("id,theatre_id");
+  const allowedPatientIds = new Set((patientLocations ?? []).filter((patient) => patient.theatre_id && allowedTheatreIds.has(patient.theatre_id)).map((patient) => patient.id));
+  return (data as WorkflowEvent[]).filter((event) => allowedPatientIds.has(event.patient_id));
 }
 
 export async function getPatientListMovements(): Promise<PatientListMovement[]> {
@@ -172,4 +184,14 @@ function normaliseCepodStages(stages: WorkflowStage[]) {
   return [...(hasPatientOnList || !patientOnList ? [] : [patientOnList]), ...withoutDecisionStage].sort(
     (a, b) => a.display_order - b.display_order
   );
+}
+
+async function scopePatientsForCurrentUser<TPatient extends { theatre_id: string | null }>(patients: TPatient[]) {
+  if (!isRolePermissionEnforced()) return patients;
+  const access = await getCurrentUserAccess();
+  if (access.all_theatres) return patients;
+  const configuration = await getTheatreConfiguration();
+  const allowedTheatreIds = new Set(configuration.theatres.map((theatre) => theatre.id));
+  const canViewUnassigned = ["theatre_coordinator", "theatre_manager"].includes(access.role);
+  return patients.filter((patient) => patient.theatre_id ? allowedTheatreIds.has(patient.theatre_id) : canViewUnassigned);
 }

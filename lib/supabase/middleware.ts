@@ -26,6 +26,23 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+  const permissionsEnforced = process.env.THEATREFLOW_ENFORCE_ROLE_PERMISSIONS === "true";
+  const pathname = request.nextUrl.pathname;
+
+  if (permissionsEnforced && !user && pathname !== "/login" && !pathname.startsWith("/api/")) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (permissionsEnforced && user && pathname === "/login") {
+    const appUrl = request.nextUrl.clone();
+    appUrl.pathname = "/patients";
+    appUrl.search = "";
+    return NextResponse.redirect(appUrl);
+  }
+
   return response;
 }

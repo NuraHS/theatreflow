@@ -3,9 +3,12 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { advanceWorkflowSchema } from "@/lib/services/schemas";
 import { activeInfrastructureEventIds, getNextStage, getStageByIdOrName } from "@/lib/services/workflow-engine";
 import { getInfrastructureEvents, getWorkflowStages } from "@/lib/repositories/workflow-repository";
+import { canAccessPatient, hasPermission } from "@/lib/services/access-control";
 
 export async function POST(request: Request) {
   const payload = advanceWorkflowSchema.parse(await request.json());
+  if (!(await hasPermission("advanceWorkflow"))) return NextResponse.json({ error: "Your role cannot advance patient workflows." }, { status: 403 });
+  if (!(await canAccessPatient(payload.patient_id))) return NextResponse.json({ error: "You do not have access to this patient's theatre." }, { status: 403 });
   const authSupabase = await createServerSupabaseClient();
   const supabase = createServiceRoleSupabaseClient() ?? authSupabase;
   const stages = await getWorkflowStages();

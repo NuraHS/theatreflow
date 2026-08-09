@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { canAccessPatient, hasPermission } from "@/lib/services/access-control";
 
 const cancelPatientSchema = z.object({
   patient_id: z.string().min(1),
@@ -12,6 +13,8 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Cancellation reason is required" }, { status: 400 });
   }
+  if (!(await hasPermission("advanceWorkflow"))) return NextResponse.json({ error: "Your role cannot cancel patients." }, { status: 403 });
+  if (!(await canAccessPatient(parsed.data.patient_id))) return NextResponse.json({ error: "You do not have access to this patient's theatre." }, { status: 403 });
 
   const authSupabase = await createServerSupabaseClient();
   const supabase = createServiceRoleSupabaseClient() ?? authSupabase;

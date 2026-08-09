@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { DEFAULT_WORKFLOW_ID } from "@/lib/constants/workflow";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createPatientSchema } from "@/lib/services/schemas";
+import { canAccessTheatre, hasPermission } from "@/lib/services/access-control";
 
 export async function POST(request: Request) {
   const payload = createPatientSchema.parse(await request.json());
+  if (!(await hasPermission("createPatients"))) {
+    return NextResponse.json({ error: "Your role cannot create patients." }, { status: 403 });
+  }
+  if (!(await canAccessTheatre(payload.theatre_id))) {
+    return NextResponse.json({ error: "You do not have access to the selected theatre." }, { status: 403 });
+  }
   const authSupabase = await createServerSupabaseClient();
   const supabase = createServiceRoleSupabaseClient() ?? authSupabase;
   const now = new Date().toISOString();
@@ -29,6 +36,8 @@ export async function POST(request: Request) {
         unresolved_from_stage: null,
         reconciliation_reviewed_at: null,
         booking_cohort,
+        theatre_id: payload.theatre_id,
+        recovery_area_id: payload.recovery_area_id || null,
         workflow_id: DEFAULT_WORKFLOW_ID
       }
     });
@@ -52,6 +61,8 @@ export async function POST(request: Request) {
     cancelled: false,
     cancellation_reason: null,
     booking_cohort,
+    theatre_id: payload.theatre_id,
+    recovery_area_id: payload.recovery_area_id || null,
     workflow_id: DEFAULT_WORKFLOW_ID
   };
 
@@ -92,6 +103,8 @@ type PatientInsert = {
   cancelled: boolean;
   cancellation_reason: string | null;
   booking_cohort: "booked" | "moved_to_planned";
+  theatre_id: string;
+  recovery_area_id: string | null;
   workflow_id: string;
 };
 
@@ -108,6 +121,17 @@ async function insertPatientWithSchemaFallback(supabase: NonNullable<ReturnType<
   if (firstAttempt.error.message.includes("booking_cohort")) {
     const withoutBookingCohort = omitPatientColumn(patient, "booking_cohort");
     return supabase.from("patients").insert(withoutBookingCohort).select().single();
+  }
+
+  if (firstAttempt.error.message.includes("theatre_id")) {
+    const withoutTheatre = omitPatientColumn(patient, "theatre_id");
+    delete withoutTheatre.recovery_area_id;
+    return supabase.from("patients").insert(withoutTheatre).select().single();
+  }
+
+  if (firstAttempt.error.message.includes("recovery_area_id")) {
+    const withoutRecovery = omitPatientColumn(patient, "recovery_area_id");
+    return supabase.from("patients").insert(withoutRecovery).select().single();
   }
 
   if (firstAttempt.error.message.includes("'operation_date'") || firstAttempt.error.message.includes("operation_date")) {
