@@ -72,12 +72,17 @@ create table public.patients (
   current_stage text not null references public.workflow_stages(id),
   cancelled boolean not null default false,
   cancellation_reason text,
+  unresolved boolean not null default false,
+  unresolved_at timestamptz,
+  unresolved_from_stage text,
+  reconciliation_reviewed_at timestamptz,
   workflow_id text not null references public.workflows(id)
 );
 
 create index patients_created_at_idx on public.patients(created_at desc);
 create index patients_current_stage_idx on public.patients(current_stage);
 create index patients_hospital_number_idx on public.patients(hospital_number);
+create index patients_unresolved_idx on public.patients(unresolved) where unresolved = true;
 
 create table public.infrastructure_events (
   id uuid primary key default gen_random_uuid(),

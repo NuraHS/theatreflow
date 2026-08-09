@@ -24,6 +24,10 @@ export async function POST(request: Request) {
         current_stage: "patient-on-list",
         cancelled: false,
         cancellation_reason: null,
+        unresolved: false,
+        unresolved_at: null,
+        unresolved_from_stage: null,
+        reconciliation_reviewed_at: null,
         booking_cohort,
         workflow_id: DEFAULT_WORKFLOW_ID
       }

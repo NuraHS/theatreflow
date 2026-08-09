@@ -1,4 +1,4 @@
-import { Activity, Bell } from "lucide-react";
+import { Activity, AlertTriangle, Bell } from "lucide-react";
 import { CepodWorkflow } from "@/components/workflow/cepod-workflow";
 import { PatientCreateForm } from "@/components/workflow/patient-create-form";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ export default async function PatientsPage() {
   const activeInfrastructure = infrastructureEvents.filter((event) => event.active);
   const today = new Date().toISOString().slice(0, 10);
   const cepodPatients = patients.filter((patient) => (patient.operation_date ?? patient.created_at.slice(0, 10)) <= today);
+  const unresolvedPatients = patients.filter((patient) => patient.unresolved);
 
   return (
     <div className="space-y-5">
@@ -31,6 +32,10 @@ export default async function PatientsPage() {
             <p className="mt-1 text-sm text-muted-foreground">Mobile-first workflow capture with automatic timestamps.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Badge tone={unresolvedPatients.length ? "red" : "green"} className="gap-1">
+              {unresolvedPatients.length ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+              {unresolvedPatients.length} unresolved
+            </Badge>
             <Badge tone={cepodPatients.some((patient) => patient.delay_status === "red") ? "red" : "green"}>
               {cepodPatients.filter((patient) => patient.delay_status !== "green").length} delayed
             </Badge>

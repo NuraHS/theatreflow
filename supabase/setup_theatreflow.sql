@@ -133,6 +133,10 @@ alter table public.patients
   add column if not exists current_stage text,
   add column if not exists cancelled boolean not null default false,
   add column if not exists cancellation_reason text,
+  add column if not exists unresolved boolean not null default false,
+  add column if not exists unresolved_at timestamptz,
+  add column if not exists unresolved_from_stage text,
+  add column if not exists reconciliation_reviewed_at timestamptz,
   add column if not exists workflow_id text;
 
 update public.patients
@@ -259,6 +263,7 @@ create table if not exists public.audit_log (
 create index if not exists patients_created_at_idx on public.patients(created_at desc);
 create index if not exists patients_current_stage_idx on public.patients(current_stage);
 create index if not exists patients_hospital_number_idx on public.patients(hospital_number);
+create index if not exists patients_unresolved_idx on public.patients(unresolved) where unresolved = true;
 create index if not exists workflow_events_patient_idx on public.workflow_events(patient_id, timestamp desc);
 
 delete from public.workflow_stages

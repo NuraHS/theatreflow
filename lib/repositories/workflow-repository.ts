@@ -3,6 +3,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { DelayReason, InfrastructureEvent, Patient, PatientListMovement, WorkflowEvent, WorkflowStage } from "@/lib/types/domain";
 import { getStageByIdOrName } from "@/lib/services/workflow-engine";
 import { getDelayStatus } from "@/lib/utils/delay";
+import { getReconciliationDueAt, getReconciliationReferenceTime, getUnresolvedThresholdMinutes } from "@/lib/utils/reconciliation";
 import { minutesSince } from "@/lib/utils/time";
 import { demoData } from "./demo-data";
 
@@ -39,23 +40,66 @@ export async function getTodaysPatients() {
   const events = supabase ? await getWorkflowEvents() : demoData.events;
   const patients = supabase ? await getPatients() : demoData.patients;
 
-  return patients.map((patient) => {
+  const now = new Date();
+  const enrichedPatients = patients.map((patient) => {
     const stage = getStageByIdOrName(stages, patient.current_stage) ?? stages[0];
     const patientEvents = events
       .filter((event) => event.patient_id === patient.id)
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
     const lastEvent = patientEvents[0] ?? null;
     const elapsed = minutesSince(lastEvent?.timestamp ?? patient.created_at);
+    const stageStartedAt = lastEvent?.timestamp ?? patient.created_at;
+    const reconciliationReference = getReconciliationReferenceTime({
+      stageStartedAt,
+      reviewedAt: patient.reconciliation_reviewed_at
+    });
+    const unresolvedThreshold = getUnresolvedThresholdMinutes(stage.id);
+    const reconciliationDueAt = getReconciliationDueAt(stage.id, reconciliationReference);
+    const shouldBeUnresolved = Boolean(
+      !patient.cancelled &&
+      stage.id !== "patient-out-of-recovery" &&
+      reconciliationDueAt &&
+      Date.parse(reconciliationDueAt) <= now.getTime()
+    );
+    const storedUnresolvedForStage = patient.unresolved && (!patient.unresolved_from_stage || patient.unresolved_from_stage === stage.id);
+    const unresolved = storedUnresolvedForStage || shouldBeUnresolved;
 
     return {
       ...patient,
       current_stage: stage.id,
+      unresolved,
+      unresolved_at: unresolved ? patient.unresolved_at ?? reconciliationDueAt : null,
+      unresolved_from_stage: unresolved ? patient.unresolved_from_stage ?? stage.id : null,
       stage,
       last_event: lastEvent,
       elapsed_minutes: elapsed,
-      delay_status: getDelayStatus(elapsed, stage.delay_threshold_minutes)
+      delay_status: getDelayStatus(elapsed, stage.delay_threshold_minutes),
+      unresolved_threshold_minutes: unresolvedThreshold,
+      reconciliation_due_at: reconciliationDueAt
     };
   });
+
+  if (supabase) {
+    const newlyUnresolved = enrichedPatients.filter((patient) => {
+      const stored = patients.find((item) => item.id === patient.id);
+      return patient.unresolved && !stored?.unresolved;
+    });
+
+    await Promise.all(
+      newlyUnresolved.map((patient) =>
+        supabase
+          .from("patients")
+          .update({
+            unresolved: true,
+            unresolved_at: patient.unresolved_at ?? now.toISOString(),
+            unresolved_from_stage: patient.current_stage
+          })
+          .eq("id", patient.id)
+      )
+    );
+  }
+
+  return enrichedPatients;
 }
 
 export async function getActivePatients() {
@@ -91,7 +135,11 @@ export async function getPatients(): Promise<Patient[]> {
     ...patient,
     procedure: patient.procedure ?? patient.procedure_name ?? "Not recorded",
     operation_date: patient.operation_date ?? patient.created_at.slice(0, 10),
-    booking_cohort: patient.booking_cohort ?? ((patient.operation_date ?? patient.created_at.slice(0, 10)) > patient.created_at.slice(0, 10) ? "moved_to_planned" : "booked")
+    booking_cohort: patient.booking_cohort ?? ((patient.operation_date ?? patient.created_at.slice(0, 10)) > patient.created_at.slice(0, 10) ? "moved_to_planned" : "booked"),
+    unresolved: patient.unresolved ?? false,
+    unresolved_at: patient.unresolved_at ?? null,
+    unresolved_from_stage: patient.unresolved_from_stage ?? null,
+    reconciliation_reviewed_at: patient.reconciliation_reviewed_at ?? null
   })) as Patient[];
 }
 

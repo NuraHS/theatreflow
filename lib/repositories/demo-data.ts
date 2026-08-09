@@ -23,6 +23,10 @@ export const demoPatients: Patient[] = [
     current_stage: "operation-started",
     cancelled: false,
     cancellation_reason: null,
+    unresolved: false,
+    unresolved_at: null,
+    unresolved_from_stage: null,
+    reconciliation_reviewed_at: null,
     workflow_id: DEFAULT_WORKFLOW_ID
   },
   {
@@ -38,6 +42,10 @@ export const demoPatients: Patient[] = [
     current_stage: "sent-for",
     cancelled: false,
     cancellation_reason: null,
+    unresolved: false,
+    unresolved_at: null,
+    unresolved_from_stage: null,
+    reconciliation_reviewed_at: null,
     workflow_id: DEFAULT_WORKFLOW_ID
   },
   {
@@ -53,6 +61,10 @@ export const demoPatients: Patient[] = [
     current_stage: "patient-on-list",
     cancelled: false,
     cancellation_reason: null,
+    unresolved: false,
+    unresolved_at: null,
+    unresolved_from_stage: null,
+    reconciliation_reviewed_at: null,
     workflow_id: DEFAULT_WORKFLOW_ID
   },
   {
@@ -68,6 +80,10 @@ export const demoPatients: Patient[] = [
     current_stage: "patient-in-recovery",
     cancelled: false,
     cancellation_reason: null,
+    unresolved: false,
+    unresolved_at: null,
+    unresolved_from_stage: null,
+    reconciliation_reviewed_at: null,
     workflow_id: DEFAULT_WORKFLOW_ID
   }
 ];

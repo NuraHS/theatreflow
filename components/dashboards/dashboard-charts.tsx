@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, CalendarDays, Clock3, Info, RefreshCw, RotateCcw } from "lucide-react";
+import { Activity, AlertTriangle, CalendarDays, Clock3, Info, RefreshCw, RotateCcw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,23 +52,26 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
   const specialtyPatients = patients.filter((patient) => specialty === "all" || patient.specialty === specialty);
   const patientIds = new Set(specialtyPatients.map((patient) => patient.id));
   const scheduledPatients = specialtyPatients.filter((patient) => !patient.cancelled && inDateRange(patient.operation_date ?? patient.created_at, range));
+  const unresolvedPatients = scheduledPatients.filter((patient) => patient.unresolved);
+  const liveScheduledPatients = scheduledPatients.filter((patient) => !patient.unresolved);
   const rangeEvents = events.filter((event) => patientIds.has(event.patient_id) && inDateRange(event.timestamp, range));
   const bookedPatients = scheduledPatients.filter((patient) => patient.booking_cohort !== "moved_to_planned");
   const movedPatients = scheduledPatients.filter((patient) => patient.booking_cohort === "moved_to_planned");
   const completedPatients = scheduledPatients.filter((patient) => patient.current_stage === "patient-out-of-recovery");
   const cancelledPatients = specialtyPatients.filter((patient) => patient.cancelled && inDateRange(patient.cancelled_at ?? patient.operation_date ?? patient.created_at, range));
   const dashboardPatients = uniquePatients([...scheduledPatients, ...cancelledPatients]);
-  const waitingPatients = scheduledPatients.filter((patient) => !patient.cancelled && ["Waiting", "Sent For", "Arrived"].includes(patient.stage.board_band));
+  const waitingPatients = liveScheduledPatients.filter((patient) => ["Waiting", "Sent For", "Arrived"].includes(patient.stage.board_band));
   const delayedPatientIds = new Set(rangeEvents.filter((event) => event.delay_reason_ids.length).map((event) => event.patient_id));
   const delayedPatients = dashboardPatients.filter((patient) => delayedPatientIds.has(patient.id));
-  const awaitingSurgeryPatients = scheduledPatients.filter((patient) => ["patient-on-list", "sent-for", "patient-arrived", "anaesthetic-started", "patient-in-theatre", "operation-started"].includes(patient.current_stage));
-  const completedSurgeryPatients = scheduledPatients.filter((patient) => ["operation-finished", "patient-in-recovery"].includes(patient.current_stage));
+  const awaitingSurgeryPatients = liveScheduledPatients.filter((patient) => ["patient-on-list", "sent-for", "patient-arrived", "anaesthetic-started", "patient-in-theatre", "operation-started"].includes(patient.current_stage));
+  const completedSurgeryPatients = liveScheduledPatients.filter((patient) => ["operation-finished", "patient-in-recovery"].includes(patient.current_stage));
   const outcomes = buildPriorityOutcomes([
     ["Total booked", scheduledPatients],
     ["Awaiting surgery", awaitingSurgeryPatients],
     ["Completed surgery", completedSurgeryPatients],
     ["Moved to planned", movedPatients],
     ["Cancelled", cancelledPatients],
+    ["Unresolved", unresolvedPatients],
     ["Delayed", delayedPatients],
     ["Completed", completedPatients]
   ]);
@@ -109,7 +113,22 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
       <div className="mt-3 flex flex-wrap gap-2"><PresetButton onClick={() => setPreset("today")}>Today</PresetButton><PresetButton onClick={() => setPreset("week")}>This week</PresetButton><PresetButton onClick={() => setPreset("last-week")}>Last week</PresetButton><PresetButton onClick={() => setPreset("month")}>This month</PresetButton></div>
     </section>
 
-    <Card className="border-primary/20 bg-gradient-to-br from-card to-secondary/30"><CardHeader><CardTitle>Case summary</CardTitle><p className="text-sm text-muted-foreground">{rangeLabel}{specialty === "all" ? " · All specialties" : ` · ${specialty}`}</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"><Summary label="Total cases" value={dashboardPatients.length} detail="Unique patients scheduled or cancelled in the selected dates." featured /><Summary label="Currently waiting" value={waitingPatients.length} detail="Patients waiting, sent for or arrived but not yet in theatre." /><Summary label="Booked on CEPOD" value={bookedPatients.length} detail="Patients booked directly on CEPOD who have never been deferred." /><Summary label="Moved to planned" value={movedPatients.length} detail="Planned or deferred patients; returning to CEPOD does not change this cohort." /><Summary label="Completed" value={completedPatients.length} detail="Selected patients recorded as out of recovery." /><Summary label="Cancelled" value={cancelledPatients.length} detail="Patients cancelled during the selected dates, whether they came from CEPOD or planned." /><Summary label="Delayed cases" value={delayedPatients.length} detail="Unique selected patients with at least one recorded delay." /><Summary label="Cases experiencing delay" value={`${delayedRate}%`} detail="Delayed unique patients ÷ total selected cases." /><Summary label="Completion rate" value={`${completionRate}%`} detail="Completed unique patients ÷ total selected cases." /><Summary label="Cancellation rate" value={`${cancellationRate}%`} detail="Patients cancelled during the selected dates ÷ total selected cases." /></CardContent></Card>
+    {unresolvedPatients.length ? (
+      <section className="rounded-lg border border-red-400 bg-red-50 p-4 text-red-950 dark:border-red-800 dark:bg-red-950/35 dark:text-red-50" role="alert">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <h2 className="font-bold">{unresolvedPatients.length} unresolved case{unresolvedPatients.length === 1 ? "" : "s"} require review</h2>
+              <p className="mt-1 text-sm">These cases are excluded from live stage counts until a staff member confirms the correct stage.</p>
+            </div>
+          </div>
+          <Link href="/patients#unresolved-cases" className="inline-flex min-h-11 items-center justify-center rounded-md bg-red-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-800 focus-visible:ring-4 focus-visible:ring-red-300">Review cases</Link>
+        </div>
+      </section>
+    ) : null}
+
+    <Card className="border-primary/20 bg-gradient-to-br from-card to-secondary/30"><CardHeader><CardTitle>Case summary</CardTitle><p className="text-sm text-muted-foreground">{rangeLabel}{specialty === "all" ? " · All specialties" : ` · ${specialty}`}</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"><Summary label="Total cases" value={dashboardPatients.length} detail="Unique patients scheduled or cancelled in the selected dates." featured /><Summary label="Currently waiting" value={waitingPatients.length} detail="Live patients waiting, sent for or arrived but not yet in theatre." /><Summary label="Unresolved" value={unresolvedPatients.length} detail="Patients withheld from live stage counts because their stage needs reconciliation." /><Summary label="Booked on CEPOD" value={bookedPatients.length} detail="Patients booked directly on CEPOD who have never been deferred." /><Summary label="Moved to planned" value={movedPatients.length} detail="Planned or deferred patients; returning to CEPOD does not change this cohort." /><Summary label="Completed" value={completedPatients.length} detail="Selected patients recorded as out of recovery." /><Summary label="Cancelled" value={cancelledPatients.length} detail="Patients cancelled during the selected dates, whether they came from CEPOD or planned." /><Summary label="Delayed cases" value={delayedPatients.length} detail="Unique selected patients with at least one recorded delay." /><Summary label="Cases experiencing delay" value={`${delayedRate}%`} detail="Delayed unique patients ÷ total selected cases." /><Summary label="Completion rate" value={`${completionRate}%`} detail="Completed unique patients ÷ total selected cases." /><Summary label="Cancellation rate" value={`${cancellationRate}%`} detail="Patients cancelled during the selected dates ÷ total selected cases." /></CardContent></Card>
 
     <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
       <ChartCard title="Cases by date" subtitle={`Booked cases · ${rangeLabel}`}><ResponsiveContainer width="100%" height={340}><BarChart data={caseSeries} margin={{ top: 8, right: 8, left: -12, bottom: 18 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} /><Legend content={<SpecialtyLegend />} />{specialties.map((item, index) => <Bar key={item} dataKey={item} stackId="cases" fill={specialtyColour(item, index)} />)}</BarChart></ResponsiveContainer></ChartCard>
@@ -142,6 +161,7 @@ function OutcomeTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payloa
     "Completed surgery": ["Completed", "surgery"],
     "Moved to planned": ["Moved to", "planned"],
     Cancelled: ["Cancelled"],
+    Unresolved: ["Unresolved"],
     Delayed: ["Delayed"],
     Completed: ["Completed"]
   };

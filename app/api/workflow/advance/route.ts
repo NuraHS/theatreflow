@@ -38,12 +38,33 @@ export async function POST(request: Request) {
   } = authSupabase ? await authSupabase.auth.getUser() : { data: { user: null } };
 
   const patientUpdate = nextStage.id === "patient-out-of-recovery"
-    ? { current_stage: nextStage.id, completed_at: timestamp.toISOString() }
-    : { current_stage: nextStage.id };
-  const { error: patientError } = await supabase
+    ? {
+        current_stage: nextStage.id,
+        completed_at: timestamp.toISOString(),
+        unresolved: false,
+        unresolved_at: null,
+        unresolved_from_stage: null,
+        reconciliation_reviewed_at: null
+      }
+    : {
+        current_stage: nextStage.id,
+        unresolved: false,
+        unresolved_at: null,
+        unresolved_from_stage: null,
+        reconciliation_reviewed_at: null
+      };
+  let { error: patientError } = await supabase
     .from("patients")
     .update(patientUpdate)
     .eq("id", payload.patient_id);
+
+  if (patientError && isReconciliationSchemaError(patientError.message)) {
+    const legacyUpdate = nextStage.id === "patient-out-of-recovery"
+      ? { current_stage: nextStage.id, completed_at: timestamp.toISOString() }
+      : { current_stage: nextStage.id };
+    const retry = await supabase.from("patients").update(legacyUpdate).eq("id", payload.patient_id);
+    patientError = retry.error;
+  }
 
   if (patientError) {
     return NextResponse.json({ error: patientError.message }, { status: 400 });
@@ -65,4 +86,8 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, next_stage: nextStage, timestamp: timestamp.toISOString() });
+}
+
+function isReconciliationSchemaError(message: string) {
+  return ["unresolved", "unresolved_at", "unresolved_from_stage", "reconciliation_reviewed_at"].some((column) => message.includes(column));
 }

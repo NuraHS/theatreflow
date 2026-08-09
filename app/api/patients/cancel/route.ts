@@ -17,12 +17,28 @@ export async function POST(request: Request) {
   const supabase = createServiceRoleSupabaseClient() ?? authSupabase;
   if (!supabase) return NextResponse.json({ ok: true, demo: true });
 
-  const { error } = await supabase.from("patients").update({
+  let { error } = await supabase.from("patients").update({
     cancelled: true,
     cancellation_reason: parsed.data.reason,
-    cancelled_at: new Date().toISOString()
+    cancelled_at: new Date().toISOString(),
+    unresolved: false,
+    unresolved_at: null,
+    unresolved_from_stage: null
   }).eq("id", parsed.data.patient_id);
+
+  if (error && isReconciliationSchemaError(error.message)) {
+    const retry = await supabase.from("patients").update({
+      cancelled: true,
+      cancellation_reason: parsed.data.reason,
+      cancelled_at: new Date().toISOString()
+    }).eq("id", parsed.data.patient_id);
+    error = retry.error;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
+}
+
+function isReconciliationSchemaError(message: string) {
+  return ["unresolved", "unresolved_at", "unresolved_from_stage"].some((column) => message.includes(column));
 }

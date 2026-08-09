@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Clock, GripVertical, QrCode, Search, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock, GripVertical, QrCode, Search, UserRound, XCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { AdvancePatientButton } from "@/components/workflow/advance-patient-button";
@@ -17,6 +17,7 @@ import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { cn } from "@/lib/utils/cn";
 import { getDelayStatus } from "@/lib/utils/delay";
 import { priorityLabel, priorityRowClasses, priorityTone } from "@/lib/utils/priority";
+import { formatUnresolvedThreshold } from "@/lib/utils/reconciliation";
 
 export function CepodWorkflow({
   patients,
@@ -41,6 +42,11 @@ export function CepodWorkflow({
   const now = useMinuteClock();
   const displayDate = now ?? initialDate;
   const todayKey = toDateKey(displayDate);
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(refreshPatients, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshPatients]);
 
   React.useEffect(() => {
     setOrderedIds((current) => {
@@ -76,13 +82,16 @@ export function CepodWorkflow({
     return orderedIds.map((id) => byId.get(id)).filter((patient): patient is PatientWithStage => Boolean(patient));
   }, [livePatients, orderedIds]);
 
-  const cepodPatients = orderedPatients.filter((patient) => isCepodDue(patient, displayDate));
-  const plannedPatients = orderedPatients
+  const unresolvedPatients = orderedPatients.filter((patient) => patient.unresolved);
+  const livePatientsForLists = orderedPatients.filter((patient) => !patient.unresolved);
+  const cepodPatients = livePatientsForLists.filter((patient) => isCepodDue(patient, displayDate));
+  const plannedPatients = livePatientsForLists
     .filter((patient) => !isCepodDue(patient, displayDate))
     .sort((a, b) => getOperationDate(a).localeCompare(getOperationDate(b)) || Date.parse(a.created_at) - Date.parse(b.created_at));
 
   const cepodFilteredPatients = cepodPatients.filter(matchesQuery);
   const plannedFilteredPatients = plannedPatients.filter(matchesQuery);
+  const unresolvedFilteredPatients = unresolvedPatients.filter(matchesQuery);
 
   const expandedPatient = expandedId ? orderedPatients.find((patient) => patient.id === expandedId) ?? null : null;
 
@@ -201,11 +210,45 @@ export function CepodWorkflow({
       />
 
       <WorkflowTimeline stages={stages} patient={expandedPatient} />
+
+      <PatientListCard
+        id="unresolved-cases"
+        title={`Unresolved cases (${unresolvedPatients.length})`}
+        description="These patients exceeded the safe review window. Confirm the current stage, advance the workflow, or cancel with a reason. No clinical outcome has been assumed."
+        firstColumnHeader="Alert"
+        query={query}
+        onQueryChange={setQuery}
+        patients={unresolvedFilteredPatients}
+        emptyMessage={unresolvedPatients.length ? "No unresolved cases match this search." : "No unresolved cases require review."}
+        alert
+        collapsible
+        initiallyCollapsed
+        renderPatient={(patient) => (
+          <PatientListEntry
+            key={patient.id}
+            listType="unresolved"
+            patient={patient}
+            stages={stages}
+            delayReasons={delayReasons}
+            firstColumnValue="Review"
+            expanded={patient.id === expandedPatient?.id}
+            dragging={false}
+            moving={false}
+            onToggle={() => setExpandedId((current) => (current === patient.id ? "" : patient.id))}
+            onMoveToCepod={() => undefined}
+            onMoveToPlanned={() => undefined}
+            onDragStart={() => undefined}
+            onDragEnd={() => undefined}
+            onDrop={() => undefined}
+          />
+        )}
+      />
     </div>
   );
 }
 
 function PatientListCard({
+  id,
   title,
   description,
   firstColumnHeader,
@@ -213,8 +256,12 @@ function PatientListCard({
   onQueryChange,
   patients,
   emptyMessage,
-  renderPatient
+  renderPatient,
+  alert = false,
+  collapsible = false,
+  initiallyCollapsed = false
 }: {
+  id?: string;
   title: string;
   description: string;
   firstColumnHeader: string;
@@ -223,22 +270,49 @@ function PatientListCard({
   patients: PatientWithStage[];
   emptyMessage: string;
   renderPatient: (patient: PatientWithStage, index: number) => React.ReactNode;
+  alert?: boolean;
+  collapsible?: boolean;
+  initiallyCollapsed?: boolean;
 }) {
+  const [isOpen, setIsOpen] = React.useState(!initiallyCollapsed);
+  const contentVisible = !collapsible || isOpen;
+  const contentId = id ? `${id}-content` : undefined;
+
   return (
-    <Card>
+    <Card id={id} className={cn(alert && "border-red-300 bg-red-50/40 dark:border-red-900 dark:bg-red-950/10")}>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle>{title}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {alert ? <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-300" aria-hidden="true" /> : null}
+              {title}
+            </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           </div>
-          <div className="relative w-full lg:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            <Input className="pl-10" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search hospital, name, consultant, specialty" />
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            {contentVisible ? (
+              <div className="relative w-full lg:w-96">
+                <Search className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                <Input className="pl-10" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search hospital, name, consultant, specialty" />
+              </div>
+            ) : null}
+            {collapsible ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 shrink-0"
+                aria-expanded={isOpen}
+                aria-controls={contentId}
+                onClick={() => setIsOpen((current) => !current)}
+              >
+                {isOpen ? "Collapse" : "Expand"}
+                <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", isOpen && "rotate-180")} aria-hidden="true" />
+              </Button>
+            ) : null}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      {contentVisible ? <CardContent id={contentId} className="space-y-3">
         <div className="hidden rounded-md border bg-muted/70 px-3 py-2 text-xs font-bold uppercase tracking-normal text-muted-foreground lg:grid lg:grid-cols-[84px_1fr_1fr_1fr_1fr_1.3fr_90px_1.2fr_100px_80px_40px] lg:gap-3">
           <span>{firstColumnHeader}</span>
           <span>Hospital no.</span>
@@ -258,7 +332,7 @@ function PatientListCard({
         {!patients.length ? (
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{emptyMessage}</div>
         ) : null}
-      </CardContent>
+      </CardContent> : null}
     </Card>
   );
 }
@@ -280,7 +354,7 @@ function PatientListEntry({
   onDragEnd,
   onDrop
 }: {
-  listType: "cepod" | "planned";
+  listType: "cepod" | "planned" | "unresolved";
   patient: PatientWithStage;
   stages: WorkflowStage[];
   delayReasons: DelayReason[];
@@ -304,7 +378,9 @@ function PatientListEntry({
       onDrop={onDrop}
       className={cn(
         "rounded-lg border transition-colors duration-200",
-        priorityRowClasses(patient.cepod_priority),
+        listType === "unresolved"
+          ? "border-red-400 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/35 dark:text-red-50"
+          : priorityRowClasses(patient.cepod_priority),
         expanded && "ring-4 ring-ring/20",
         dragging && "opacity-50"
       )}
@@ -326,8 +402,10 @@ function PatientListEntry({
             >
               <GripVertical className="h-5 w-5" aria-hidden="true" />
             </button>
-          ) : (
+          ) : listType === "planned" ? (
             <CalendarDays className="ml-2 h-5 w-5" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="ml-2 h-5 w-5 text-red-700 dark:text-red-300" aria-hidden="true" />
           )}
           <span className="min-w-6 text-center text-sm font-bold">{firstColumnValue}</span>
         </div>
@@ -365,6 +443,15 @@ function PatientListEntry({
         </div>
       </div>
 
+      {listType === "unresolved" ? (
+        <div className="mx-3 mb-3 flex items-start gap-2 rounded-md border border-red-300 bg-white/70 px-3 py-2 text-sm font-semibold text-red-950 dark:border-red-800 dark:bg-red-950/50 dark:text-red-50" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>
+            This patient has remained at “{patient.stage.name}” for more than {formatUnresolvedThreshold(patient.unresolved_threshold_minutes)}. Please update or confirm the stage before returning the patient to the live list.
+          </p>
+        </div>
+      ) : null}
+
       {expanded ? (
         <div className="border-t border-current/15 bg-background/70 p-3 lg:p-4">
           <ExpandedPatientCard
@@ -394,15 +481,32 @@ function ExpandedPatientCard({
   patient: PatientWithStage;
   nextStage: WorkflowStage | null;
   delayReasons: DelayReason[];
-  listType: "cepod" | "planned";
+  listType: "cepod" | "planned" | "unresolved";
   moving: boolean;
   onMoveToCepod: () => void;
   onMoveToPlanned: () => void;
 }) {
   const router = useRouter();
   const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [reconcileOpen, setReconcileOpen] = React.useState(false);
   const [cancelReason, setCancelReason] = React.useState("");
   const [cancelling, setCancelling] = React.useState(false);
+  const [reconciling, setReconciling] = React.useState(false);
+
+  async function confirmStillActive() {
+    setReconciling(true);
+    const response = await fetch("/api/patients/reconcile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: patient.id, action: "keep_active" })
+    });
+    const result = (await response.json()) as { error?: string; demo?: boolean };
+    setReconciling(false);
+    if (!response.ok) return toast.error(result.error ?? "Unable to reconcile patient");
+    toast.success(result.demo ? "Demo patient returned to the live list." : "Patient confirmed active and returned to the live list.");
+    setReconcileOpen(false);
+    router.refresh();
+  }
 
   async function cancelPatient() {
     setCancelling(true);
@@ -440,6 +544,14 @@ function ExpandedPatientCard({
           <Button type="button" size="lg" className="w-full" disabled={moving} onClick={onMoveToCepod}>
             {moving ? "Moving..." : "Move to CEPOD"}
           </Button>
+        ) : listType === "unresolved" ? (
+          <>
+            <Button type="button" size="lg" className="w-full" onClick={() => setReconcileOpen(true)}>
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              Confirm still active
+            </Button>
+            <AdvancePatientButton patient={patient} delayReasons={delayReasons} nextStage={nextStage} elapsedMinutes={patient.elapsed_minutes} />
+          </>
         ) : (
           <>
             <AdvancePatientButton patient={patient} delayReasons={delayReasons} nextStage={nextStage} elapsedMinutes={patient.elapsed_minutes} />
@@ -472,6 +584,22 @@ function ExpandedPatientCard({
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setCancelOpen(false)}>Keep case</Button>
               <Button type="button" variant="destructive" disabled={cancelling || cancelReason.trim().length < 3} onClick={() => void cancelPatient()}>{cancelling ? "Recording..." : "Confirm cancellation"}</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {reconcileOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-cyan-950/40 p-3 sm:items-center sm:justify-center">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby={`reconcile-title-${patient.id}`}>
+            <h2 id={`reconcile-title-${patient.id}`} className="text-lg font-bold">Confirm this patient is still active?</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              This returns the patient to the live list at “{patient.stage.name}” and starts a new {formatUnresolvedThreshold(patient.unresolved_threshold_minutes)} review window. It does not change the clinical stage or its original start time.
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setReconcileOpen(false)}>Keep unresolved</Button>
+              <Button type="button" disabled={reconciling} onClick={() => void confirmStillActive()}>
+                {reconciling ? "Confirming..." : "Confirm still active"}
+              </Button>
             </div>
           </div>
         </div>

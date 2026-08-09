@@ -35,6 +35,10 @@ export type Patient = {
   cancellation_reason: string | null;
   cancelled_at?: string | null;
   completed_at?: string | null;
+  unresolved: boolean;
+  unresolved_at: string | null;
+  unresolved_from_stage: string | null;
+  reconciliation_reviewed_at: string | null;
   booking_cohort?: "booked" | "moved_to_planned";
   workflow_id: string;
 };
@@ -91,6 +95,8 @@ export type PatientWithStage = Patient & {
   last_event: WorkflowEvent | null;
   elapsed_minutes: number;
   delay_status: "green" | "amber" | "red";
+  unresolved_threshold_minutes: number | null;
+  reconciliation_due_at: string | null;
 };
 
 export type DashboardFilters = {
