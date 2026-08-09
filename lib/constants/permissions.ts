@@ -9,15 +9,19 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   read_only_auditor: "Read-only Auditor"
 };
 
-export const PERMISSIONS: Record<string, UserRole[]> = {
+export const PERMISSIONS = {
   viewPatients: ["administrator", "manager", "clinical_lead", "consultant", "theatre_staff", "read_only_auditor"],
   advanceWorkflow: ["administrator", "manager", "clinical_lead", "consultant", "theatre_staff"],
   createPatients: ["administrator", "manager", "clinical_lead", "consultant", "theatre_staff"],
   viewDashboards: ["administrator", "manager", "clinical_lead", "consultant", "read_only_auditor"],
   manageSettings: ["administrator"],
-  exportReports: ["administrator", "manager", "clinical_lead", "read_only_auditor"]
-};
+  exportReports: ["administrator", "manager", "clinical_lead", "read_only_auditor"],
+  viewSystemHealth: ["administrator"],
+  viewSystemDiagnostics: ["administrator"]
+} satisfies Record<string, UserRole[]>;
 
-export function can(role: UserRole, permission: keyof typeof PERMISSIONS) {
-  return PERMISSIONS[permission].includes(role);
+export type Permission = keyof typeof PERMISSIONS;
+
+export function can(role: UserRole, permission: Permission) {
+  return (PERMISSIONS[permission] as readonly UserRole[]).includes(role);
 }

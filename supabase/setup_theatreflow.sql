@@ -266,6 +266,76 @@ create index if not exists patients_hospital_number_idx on public.patients(hospi
 create index if not exists patients_unresolved_idx on public.patients(unresolved) where unresolved = true;
 create index if not exists workflow_events_patient_idx on public.workflow_events(patient_id, timestamp desc);
 
+create table if not exists public.system_incidents (
+  id uuid primary key default gen_random_uuid(),
+  occurred_at timestamptz not null,
+  recorded_at timestamptz not null default now(),
+  component text not null check (component in ('application','database','authentication','storage','backup','network','certificate','update','other')),
+  severity text not null check (severity in ('info','warning','critical')),
+  status text not null default 'open' check (status in ('open','monitoring','resolved')),
+  summary text not null check (char_length(summary) between 3 and 200),
+  details text,
+  resolution_notes text,
+  resolved_at timestamptz,
+  recorded_by uuid references auth.users(id)
+);
+
+create table if not exists public.system_health_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  checked_at timestamptz not null default now(),
+  overall_status text not null check (overall_status in ('healthy','warning','critical','unknown')),
+  application_status text not null check (application_status in ('healthy','warning','critical','unknown')),
+  database_status text not null check (database_status in ('healthy','warning','critical','unknown')),
+  authentication_status text not null check (authentication_status in ('healthy','warning','critical','unknown')),
+  storage_status text not null check (storage_status in ('healthy','warning','critical','unknown')),
+  database_size_bytes bigint,
+  storage_total_bytes bigint,
+  storage_used_bytes bigint,
+  app_version text not null,
+  critical_incidents_24h integer not null default 0,
+  warnings_24h integer not null default 0,
+  details jsonb not null default '{}'::jsonb
+);
+
+create table if not exists public.system_maintenance_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null check (event_type in ('backup','restore','migration','update','certificate','maintenance')),
+  status text not null check (status in ('success','warning','failed')),
+  occurred_at timestamptz not null default now(),
+  version text,
+  notes text,
+  recorded_by uuid references auth.users(id)
+);
+
+create table if not exists public.theatreflow_schema_migrations (
+  version text primary key,
+  name text not null,
+  applied_at timestamptz not null default now()
+);
+
+create index if not exists system_incidents_occurred_at_idx on public.system_incidents(occurred_at desc);
+create index if not exists system_incidents_open_idx on public.system_incidents(status) where status <> 'resolved';
+create index if not exists system_health_snapshots_checked_at_idx on public.system_health_snapshots(checked_at desc);
+create index if not exists system_maintenance_events_occurred_at_idx on public.system_maintenance_events(occurred_at desc);
+
+create or replace function public.get_theatreflow_database_metrics()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_catalog
+as $$
+  select jsonb_build_object(
+    'database_size_bytes', pg_database_size(current_database()),
+    'connection_count', (select count(*) from pg_stat_activity where datname = current_database()),
+    'max_connections', current_setting('max_connections')::integer
+  );
+$$;
+
+insert into public.theatreflow_schema_migrations (version, name)
+values ('0009', 'System health monitoring and technical incident audit')
+on conflict (version) do update set name = excluded.name;
+
 delete from public.workflow_stages
 where id in ('decision-to-operate', 'knife-to-skin', 'procedure-finished', 'out-of-theatre', 'recovery-ready', 'left-recovery', 'returned-to-ward');
 

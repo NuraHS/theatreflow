@@ -1,18 +1,23 @@
 import Link from "next/link";
-import { Activity, BarChart3, ClipboardList, FileDown, LayoutDashboard, Settings, Sparkles } from "lucide-react";
+import { Activity, BarChart3, ClipboardList, FileDown, HeartPulse, LayoutDashboard, Settings, Sparkles, Stethoscope } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Badge } from "@/components/ui/badge";
+import { can, type Permission } from "@/lib/constants/permissions";
+import type { UserRole } from "@/lib/types/domain";
 
-const nav = [
-  { href: "/patients", label: "Patients", icon: ClipboardList },
-  { href: "/board", label: "Live Board", icon: LayoutDashboard },
-  { href: "/dashboards", label: "Dashboards", icon: BarChart3 },
-  { href: "/reports", label: "Reports", icon: FileDown },
-  { href: "/insights", label: "Insights", icon: Sparkles },
-  { href: "/settings", label: "Settings", icon: Settings }
+const nav: Array<{ href: string; label: string; icon: typeof Activity; permission: Permission }> = [
+  { href: "/patients", label: "Patients", icon: ClipboardList, permission: "viewPatients" },
+  { href: "/board", label: "Live Board", icon: LayoutDashboard, permission: "viewPatients" },
+  { href: "/dashboards", label: "Dashboards", icon: BarChart3, permission: "viewDashboards" },
+  { href: "/reports", label: "Reports", icon: FileDown, permission: "exportReports" },
+  { href: "/insights", label: "Insights", icon: Sparkles, permission: "viewDashboards" },
+  { href: "/admin/system-health", label: "System Health", icon: HeartPulse, permission: "viewSystemHealth" },
+  { href: "/admin/diagnostics", label: "Diagnostics", icon: Stethoscope, permission: "viewSystemDiagnostics" },
+  { href: "/settings", label: "Settings", icon: Settings, permission: "manageSettings" }
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, role, enforceRolePermissions }: { children: React.ReactNode; role: UserRole; enforceRolePermissions: boolean }) {
+  const visibleNav = nav.filter((item) => !enforceRolePermissions || can(role, item.permission));
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
@@ -32,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-3">
-          {nav.map((item) => (
+          {visibleNav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
