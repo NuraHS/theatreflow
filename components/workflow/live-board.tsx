@@ -110,7 +110,7 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 xl:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 min-[900px]:grid-cols-4 xl:grid-cols-7">
         {bands.map((band) => {
           const bandPatients = selectedPatients.filter((patient) => patient.stage.board_band === band);
           return (
