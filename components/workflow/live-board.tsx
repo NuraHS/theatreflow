@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, BedDouble, Building2, Clock, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -43,7 +42,6 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
         ? selectedSuiteId === "all" ? !patient.theatre_id || suiteTheatreIds.has(patient.theatre_id) : Boolean(patient.theatre_id && suiteTheatreIds.has(patient.theatre_id))
         : patient.theatre_id === selectedTheatreId
   );
-  const unassignedCount = livePatients.filter((patient) => !patient.theatre_id).length;
   const selectedRecoveryAreas = locations.recovery_areas.filter((area) => selectedSuiteId === "all" || area.suite_id === selectedSuiteId);
 
   function selectSuite(value: string) {
@@ -87,57 +85,21 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-4" aria-label="Theatre selector">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant={selectedTheatreId === "all" ? "default" : "outline"} className="min-h-11" onClick={() => setSelectedTheatreId("all")}>
-                All theatres
-                <Badge tone={selectedTheatreId === "all" ? "blue" : "neutral"}>{selectedPatients.length}</Badge>
-              </Button>
-              {unassignedCount ? (
-                <Button type="button" variant={selectedTheatreId === "unassigned" ? "default" : "outline"} className="min-h-11" onClick={() => { setSelectedSuiteId("all"); setSelectedTheatreId("unassigned"); }}>
-                  Unassigned
-                  <Badge tone="amber">{unassignedCount}</Badge>
-                </Button>
-              ) : null}
-            </div>
-            {displayedSuites.map((suite) => (
-              <section key={suite.id} aria-labelledby={`theatre-selector-${suite.id}`} className={cn(selectedSuiteId === "all" && "rounded-lg border bg-muted/20 p-3")}>
-                {selectedSuiteId === "all" ? (
-                  <div className="mb-3 flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
-                    <h3 id={`theatre-selector-${suite.id}`} className="font-bold">{suite.name}</h3>
-                    <Badge tone="neutral">{suite.theatres.length} theatre{suite.theatres.length === 1 ? "" : "s"}</Badge>
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {suite.theatres.map((theatre) => {
-                    const count = livePatients.filter((patient) => patient.theatre_id === theatre.id).length;
-                    return (
-                      <Button key={theatre.id} type="button" variant={selectedTheatreId === theatre.id ? "default" : "outline"} className="min-h-11" onClick={() => setSelectedTheatreId(theatre.id)}>
-                        {theatre.name}
-                        <Badge tone={selectedTheatreId === theatre.id ? "blue" : "neutral"}>{count}</Badge>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-
           <div className="space-y-5">
             {displayedSuites.map((suite) => (
               <section key={suite.id} aria-labelledby={`theatre-overview-${suite.id}`}>
-                {selectedSuiteId === "all" ? <h3 id={`theatre-overview-${suite.id}`} className="mb-3 text-base font-bold">{suite.name}</h3> : null}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+                <h3 id={`theatre-overview-${suite.id}`} className="mb-3 text-base font-bold">{suite.name}</h3>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 min-[900px]:grid-cols-5">
                   {suite.theatres.map((theatre) => {
                     const theatrePatients = livePatients.filter((patient) => patient.theatre_id === theatre.id);
                     const delayed = theatrePatients.filter((patient) => patient.delay_status !== "green").length;
                     const operating = theatrePatients.filter((patient) => ["Anaesthetic", "Operating"].includes(patient.stage.board_band)).length;
                     const recovery = theatrePatients.filter((patient) => patient.stage.board_band === "Recovery").length;
+                    const selected = selectedTheatreId === theatre.id;
                     return (
-                      <button key={theatre.id} type="button" onClick={() => setSelectedTheatreId(theatre.id)} className={cn("clinical-card cursor-pointer rounded-lg border bg-card p-4 text-left transition-colors duration-200 hover:border-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30", selectedTheatreId === theatre.id && "border-primary bg-cyan-50 dark:bg-cyan-950/25")}>
-                        <div className="flex items-start justify-between gap-2"><div><p className="font-bold">{theatre.name}</p><p className="text-xs text-muted-foreground">{suite.name}</p></div><Badge tone={delayed ? "amber" : "green"}>{delayed ? `${delayed} delayed` : "On track"}</Badge></div>
-                        <div className="mt-4 grid grid-cols-3 gap-2 text-center"><BoardStat label="Active" value={theatrePatients.length} /><BoardStat label="In theatre" value={operating} /><BoardStat label="Recovery" value={recovery} /></div>
+                      <button key={theatre.id} type="button" aria-pressed={selected} aria-label={`${theatre.name}, ${suite.name}. ${selected ? "Deselect theatre and show all theatres" : "Select theatre"}`} onClick={() => setSelectedTheatreId((current) => current === theatre.id ? "all" : theatre.id)} className={cn("clinical-card min-h-36 cursor-pointer rounded-lg border bg-card p-3 text-left transition-colors duration-200 hover:border-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30", selected && "border-primary bg-cyan-50 ring-2 ring-primary/20 dark:bg-cyan-950/25")}>
+                        <div><p className="whitespace-nowrap font-bold">{theatre.name}</p><Badge tone={delayed ? "amber" : "green"} className="mt-2 px-2">{delayed ? `${delayed} delayed` : "On track"}</Badge></div>
+                        <div className="mt-3 grid grid-cols-3 gap-1 text-center"><BoardStat label="Active" value={theatrePatients.length} /><BoardStat label="In theatre" value={operating} /><BoardStat label="Recovery" value={recovery} /></div>
                       </button>
                     );
                   })}
@@ -197,5 +159,5 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
 }
 
 function BoardStat({ label, value }: { label: string; value: number }) {
-  return <div><p className="text-xl font-bold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div>;
+  return <div className="min-w-0"><p className="text-lg font-bold leading-tight">{value}</p><p className="text-[11px] leading-tight text-muted-foreground">{label}</p></div>;
 }
