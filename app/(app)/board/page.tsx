@@ -13,7 +13,7 @@ export default async function BoardPage() {
 
   return (
     <div className="space-y-5">
-      <section className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm sm:p-5 md:flex-row md:items-center md:justify-between">
+      <section className="clinical-card flex flex-col gap-3 rounded-lg border bg-card p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <MonitorUp className="h-5 w-5 text-primary" aria-hidden="true" />

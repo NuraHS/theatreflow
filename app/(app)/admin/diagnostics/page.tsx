@@ -16,7 +16,7 @@ export default async function SystemDiagnosticsPage() {
   ]);
 
   return <div className="space-y-5">
-    <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+    <section className="clinical-card rounded-lg border bg-card p-4 sm:p-5">
       <div className="flex items-center gap-2"><Stethoscope className="h-5 w-5 text-primary" aria-hidden="true" /><h1 className="text-2xl font-bold tracking-normal">System Diagnostics</h1></div>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Isolate live faults, record patient-data-free technical incidents, document resolutions and compare health over time.</p>
     </section>

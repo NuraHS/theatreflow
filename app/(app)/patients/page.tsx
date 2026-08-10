@@ -27,7 +27,7 @@ export default async function PatientsPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+      <section className="clinical-card rounded-lg border bg-card p-4 sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -67,8 +67,13 @@ export default async function PatientsPage() {
         </Card>
       ) : null}
 
-      {canCreatePatients ? <PatientCreateForm suites={locations.suites} theatres={locations.theatres} recoveryAreas={locations.recovery_areas} /> : null}
-      <CepodWorkflow patients={patients} stages={stages} delayReasons={delayReasons} todayIso={new Date().toISOString()} />
+      <CepodWorkflow
+        patients={patients}
+        stages={stages}
+        delayReasons={delayReasons}
+        todayIso={new Date().toISOString()}
+        createPatient={canCreatePatients ? <PatientCreateForm suites={locations.suites} theatres={locations.theatres} recoveryAreas={locations.recovery_areas} /> : null}
+      />
     </div>
   );
 }

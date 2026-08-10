@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/select";
 
 export function DashboardFilters() {
   return (
-    <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="clinical-card grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
       <Select aria-label="Date range">
         <option>Today</option>
         <option>Last 7 days</option>

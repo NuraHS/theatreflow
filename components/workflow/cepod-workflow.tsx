@@ -23,12 +23,14 @@ export function CepodWorkflow({
   patients,
   stages,
   delayReasons,
-  todayIso
+  todayIso,
+  createPatient
 }: {
   patients: PatientWithStage[];
   stages: WorkflowStage[];
   delayReasons: DelayReason[];
   todayIso: string;
+  createPatient?: React.ReactNode;
 }) {
   const router = useRouter();
   const refreshPatients = React.useCallback(() => router.refresh(), [router]);
@@ -209,6 +211,8 @@ export function CepodWorkflow({
         )}
       />
 
+      {createPatient}
+
       <WorkflowTimeline stages={stages} patient={expandedPatient} />
 
       <PatientListCard
@@ -279,7 +283,7 @@ function PatientListCard({
   const contentId = id ? `${id}-content` : undefined;
 
   return (
-    <Card id={id} className={cn(alert && "border-red-300 bg-red-50/40 dark:border-red-900 dark:bg-red-950/10")}>
+    <Card id={id} className={cn(alert && "border-red-300 bg-card dark:border-red-900 dark:bg-red-950/10")}>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Activity, BarChart3, ClipboardList, FileDown, HeartPulse, LayoutDashboard, Settings, Sparkles, Stethoscope, UsersRound } from "lucide-react";
+import { Activity, BarChart3, ClipboardList, FileDown, LayoutDashboard, Settings, Sparkles } from "lucide-react";
+import { AdminAccessButton } from "@/components/layout/admin-access-button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Badge } from "@/components/ui/badge";
@@ -12,17 +13,14 @@ const nav: Array<{ href: string; label: string; icon: typeof Activity; permissio
   { href: "/dashboards", label: "Dashboards", icon: BarChart3, permission: "viewDashboards" },
   { href: "/reports", label: "Reports", icon: FileDown, permission: "exportReports" },
   { href: "/insights", label: "Insights", icon: Sparkles, permission: "viewDashboards" },
-  { href: "/admin/system-health", label: "System Health", icon: HeartPulse, permission: "viewSystemHealth" },
-  { href: "/admin/diagnostics", label: "Diagnostics", icon: Stethoscope, permission: "viewSystemDiagnostics" },
-  { href: "/admin/users", label: "Users & Access", icon: UsersRound, permission: "manageUsers" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "manageSettings" }
 ];
 
 export function AppShell({ children, access, enforceRolePermissions }: { children: React.ReactNode; access: CurrentUserAccess; enforceRolePermissions: boolean }) {
   const visibleNav = nav.filter((item) => !enforceRolePermissions || can(access.role, item.permission));
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+    <div className="min-h-screen bg-page">
+      <header className="sticky top-0 z-40 border-b border-[#183b56] bg-card/95 backdrop-blur dark:border-border dark:bg-background/95">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <Link href="/" className="flex min-h-11 items-center gap-3 rounded-md focus-visible:ring-4 focus-visible:ring-ring/30">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -50,6 +48,7 @@ export function AppShell({ children, access, enforceRolePermissions }: { childre
               {item.label}
             </Link>
           ))}
+          <AdminAccessButton access={access} enforced={enforceRolePermissions} />
         </nav>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-5 sm:py-6">{children}</main>

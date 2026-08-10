@@ -11,6 +11,7 @@
 
 @layer base {
   :root {
+    --page-background: 183 46% 82%;
     --background: 0 0% 100%;
     --foreground: 192 74% 18%;
     --card: 0 0% 100%;
@@ -34,6 +35,7 @@
   }
 
   .dark {
+    --page-background: 193 71% 8%;
     --background: 193 71% 8%;
     --foreground: 190 60% 96%;
     --card: 193 62% 11%;
@@ -68,7 +70,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-page text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
@@ -78,6 +80,16 @@
 }
 
 @layer components {
+  .clinical-card {
+    border-color: #183b56;
+    box-shadow: 3px 3px 8px rgba(15, 45, 65, 0.14);
+  }
+
+  .dark .clinical-card {
+    border-color: hsl(var(--border));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
   .clinical-grid {
     background-image:
       linear-gradient(rgba(8, 145, 178, 0.06) 1px, transparent 1px),
