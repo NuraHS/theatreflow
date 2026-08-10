@@ -6,6 +6,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import type { CurrentUserAccess, UserRole } from "@/lib/types/domain";
 
 const rolePermissionsEnforced = process.env.THEATREFLOW_ENFORCE_ROLE_PERMISSIONS === "true";
+const publicViewPermissions: Permission[] = ["viewPatients", "viewLiveBoard", "viewDashboards"];
 
 const demoAdministrator: CurrentUserAccess = {
   id: "demo-administrator",
@@ -17,6 +18,7 @@ const demoAdministrator: CurrentUserAccess = {
   primary_suite_id: null,
   suite_ids: [],
   theatre_ids: [],
+  specialty_ids: [],
   authenticated: false,
   all_theatres: true
 };
@@ -38,9 +40,10 @@ export async function getCurrentUserAccess(): Promise<CurrentUserAccess> {
     .maybeSingle();
 
   const role = normaliseRole(profile?.role);
-  const [suiteAccess, theatreAccess] = await Promise.all([
+  const [suiteAccess, theatreAccess, specialtyAccess] = await Promise.all([
     supabase.from("profile_suite_access").select("suite_id").eq("profile_id", user.id),
-    supabase.from("profile_theatre_access").select("theatre_id").eq("profile_id", user.id)
+    supabase.from("profile_theatre_access").select("theatre_id").eq("profile_id", user.id),
+    supabase.from("profile_specialty_access").select("specialty").eq("profile_id", user.id)
   ]);
   const suiteIds = unique([
     ...(profile?.primary_suite_id ? [String(profile.primary_suite_id)] : []),
@@ -57,6 +60,7 @@ export async function getCurrentUserAccess(): Promise<CurrentUserAccess> {
     primary_suite_id: profile?.primary_suite_id ?? null,
     suite_ids: suiteIds,
     theatre_ids: unique((theatreAccess.data ?? []).map((item) => String(item.theatre_id))),
+    specialty_ids: unique((specialtyAccess.data ?? []).map((item) => String(item.specialty))),
     authenticated: true,
     all_theatres: hasGlobalPatientAccess(role)
   };
@@ -72,6 +76,7 @@ export function isRolePermissionEnforced() {
 
 export async function hasPermission(permission: Permission) {
   if (!rolePermissionsEnforced) return true;
+  if (publicViewPermissions.includes(permission)) return true;
   const access = await getCurrentUserAccess();
   return access.authenticated && access.active && can(access.role, permission);
 }
@@ -125,6 +130,7 @@ function unauthenticatedAccess(): CurrentUserAccess {
     primary_suite_id: null,
     suite_ids: [],
     theatre_ids: [],
+    specialty_ids: [],
     authenticated: false,
     all_theatres: false
   };

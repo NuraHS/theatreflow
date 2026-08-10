@@ -54,6 +54,7 @@ export type UserProfile = {
   primary_suite_id: string | null;
   suite_ids: string[];
   theatre_ids: string[];
+  specialty_ids: string[];
 };
 
 export type CurrentUserAccess = UserProfile & {

@@ -24,7 +24,7 @@ The dialog is only the entry point. It does not bypass page permissions or datab
 
 ## Required configuration
 
-Apply the database migrations through `0010_authentication_roles_and_theatre_locations.sql`. Migration `0009_system_health_monitoring.sql` must be applied before `0010`.
+Apply the database migrations through `0011_clinical_lead_specialty_access.sql`. Migration `0009_system_health_monitoring.sql` must be applied before `0010`, and `0010` must be applied before `0011`.
 
 Set these values in the server's `.env.local` file:
 
@@ -73,9 +73,11 @@ After role enforcement is enabled:
 
 The password is handled by Supabase Auth and is not stored in `public.profiles`. Theatreflow stores the user's name, role, active status and location assignments in the profile and access tables.
 
-## Create non-administrator users
+## Create management users
 
-Use the same **New user** form and choose the appropriate role. Theatre staff should be assigned to the theatres they work in. Theatre coordinators and theatre managers should have a primary suite selected. Service managers, clinical leads and divisional leadership receive broader reporting access according to the Theatreflow permission map.
+Use the same **New user** form and choose one of the supported privileged roles: Administrator, Theatre Manager, Clinical Lead, Service Manager or Divisional Leadership. Routine theatre and recovery staff use the public Patients, Live Board and Dashboards views and do not require individual accounts.
+
+Theatre Manager, Service Manager and Divisional Leadership accounts can be assigned to theatre suites and individual theatres. The assignment control groups theatres beneath their suite names. Clinical Lead accounts are assigned to specialties instead; their patient, dashboard, report and insight data is filtered to those specialties across theatre suites.
 
 ## Disable access
 
@@ -86,7 +88,7 @@ Open the user's card in **Users and access**, clear **Account active**, and save
 Check the following in order:
 
 1. The three Supabase environment values are present and the app was restarted after they changed.
-2. Migrations `0009` and `0010` completed successfully.
+2. Migrations `0009`, `0010` and `0011` completed successfully.
 3. The user exists in Supabase Auth.
 4. A row with the same user ID exists in `public.profiles`.
 5. The profile has `role = 'administrator'` and `active = true`.

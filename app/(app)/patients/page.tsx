@@ -12,13 +12,14 @@ export const revalidate = 0;
 
 export default async function PatientsPage() {
   await requirePagePermission("viewPatients");
-  const [patients, delayReasons, infrastructureEvents, stages, locations, canCreatePatients] = await Promise.all([
+  const [patients, delayReasons, infrastructureEvents, stages, locations, canCreatePatients, canManageWorkflow] = await Promise.all([
     getActivePatients(),
     getDelayReasons(),
     getInfrastructureEvents(),
     getWorkflowStages(),
     getTheatreConfiguration(),
-    hasPermission("createPatients")
+    hasPermission("createPatients"),
+    hasPermission("advanceWorkflow")
   ]);
   const activeInfrastructure = infrastructureEvents.filter((event) => event.active);
   const today = new Date().toISOString().slice(0, 10);
@@ -72,6 +73,7 @@ export default async function PatientsPage() {
         stages={stages}
         delayReasons={delayReasons}
         todayIso={new Date().toISOString()}
+        canManageWorkflow={canManageWorkflow}
         createPatient={canCreatePatients ? <PatientCreateForm suites={locations.suites} theatres={locations.theatres} recoveryAreas={locations.recovery_areas} /> : null}
       />
     </div>

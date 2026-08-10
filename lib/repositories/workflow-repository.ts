@@ -160,6 +160,13 @@ export async function getWorkflowEvents(): Promise<WorkflowEvent[]> {
   if (error || !data) return demoData.events;
   if (!isRolePermissionEnforced()) return data as WorkflowEvent[];
   const access = await getCurrentUserAccess();
+  if (!access.authenticated) return data as WorkflowEvent[];
+  if (access.role === "clinical_lead") {
+    if (!access.specialty_ids.length) return [];
+    const { data: patientSpecialties } = await supabase.from("patients").select("id,specialty");
+    const allowedPatientIds = new Set((patientSpecialties ?? []).filter((patient) => access.specialty_ids.includes(String(patient.specialty))).map((patient) => patient.id));
+    return (data as WorkflowEvent[]).filter((event) => allowedPatientIds.has(event.patient_id));
+  }
   if (access.all_theatres) return data as WorkflowEvent[];
   const configuration = await getTheatreConfiguration();
   const allowedTheatreIds = new Set(configuration.theatres.map((theatre) => theatre.id));
@@ -189,6 +196,11 @@ function normaliseCepodStages(stages: WorkflowStage[]) {
 async function scopePatientsForCurrentUser<TPatient extends { theatre_id: string | null }>(patients: TPatient[]) {
   if (!isRolePermissionEnforced()) return patients;
   const access = await getCurrentUserAccess();
+  if (!access.authenticated) return patients;
+  if (access.role === "clinical_lead") {
+    if (!access.specialty_ids.length) return [];
+    return patients.filter((patient) => access.specialty_ids.includes(String((patient as TPatient & { specialty?: string }).specialty ?? "")));
+  }
   if (access.all_theatres) return patients;
   const configuration = await getTheatreConfiguration();
   const allowedTheatreIds = new Set(configuration.theatres.map((theatre) => theatre.id));

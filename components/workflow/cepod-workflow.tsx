@@ -24,12 +24,14 @@ export function CepodWorkflow({
   stages,
   delayReasons,
   todayIso,
+  canManageWorkflow,
   createPatient
 }: {
   patients: PatientWithStage[];
   stages: WorkflowStage[];
   delayReasons: DelayReason[];
   todayIso: string;
+  canManageWorkflow: boolean;
   createPatient?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -151,7 +153,7 @@ export function CepodWorkflow({
     <div className="space-y-4">
       <PatientListCard
         title={`CEPOD list ${formatLongDate(displayDate)}`}
-        description="Drag patients to reorder the live list. Use the arrow to expand workflow details."
+        description={canManageWorkflow ? "Drag patients to reorder the live list. Use the arrow to expand workflow details." : "Review the current CEPOD list. Use the arrow to view patient and pathway details."}
         firstColumnHeader="Order"
         query={query}
         onQueryChange={setQuery}
@@ -169,6 +171,7 @@ export function CepodWorkflow({
             expanded={patient.id === expandedPatient?.id}
             dragging={draggedId === patient.id}
             moving={movingPatientId === patient.id}
+            canManageWorkflow={canManageWorkflow}
             onToggle={() => setExpandedId((current) => (current === patient.id ? "" : patient.id))}
             onMoveToCepod={() => movePatientToDate(patient.id, todayKey, "Patient moved to CEPOD list.")}
             onMoveToPlanned={() => movePatientToDate(patient.id, tomorrowDateKey(displayDate), "Patient moved to planned list.")}
@@ -201,6 +204,7 @@ export function CepodWorkflow({
             expanded={patient.id === expandedPatient?.id}
             dragging={false}
             moving={movingPatientId === patient.id}
+            canManageWorkflow={canManageWorkflow}
             onToggle={() => setExpandedId((current) => (current === patient.id ? "" : patient.id))}
             onMoveToCepod={() => movePatientToDate(patient.id, todayKey, "Patient moved to CEPOD list.")}
             onMoveToPlanned={() => movePatientToDate(patient.id, tomorrowDateKey(displayDate), "Patient moved to planned list.")}
@@ -238,6 +242,7 @@ export function CepodWorkflow({
             expanded={patient.id === expandedPatient?.id}
             dragging={false}
             moving={false}
+            canManageWorkflow={canManageWorkflow}
             onToggle={() => setExpandedId((current) => (current === patient.id ? "" : patient.id))}
             onMoveToCepod={() => undefined}
             onMoveToPlanned={() => undefined}
@@ -351,6 +356,7 @@ function PatientListEntry({
   expanded,
   dragging,
   moving,
+  canManageWorkflow,
   onToggle,
   onMoveToCepod,
   onMoveToPlanned,
@@ -367,6 +373,7 @@ function PatientListEntry({
   expanded: boolean;
   dragging: boolean;
   moving: boolean;
+  canManageWorkflow: boolean;
   onToggle: () => void;
   onMoveToCepod: () => void;
   onMoveToPlanned: () => void;
@@ -378,8 +385,8 @@ function PatientListEntry({
 
   return (
     <article
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={onDrop}
+      onDragOver={canManageWorkflow ? (event) => event.preventDefault() : undefined}
+      onDrop={canManageWorkflow ? onDrop : undefined}
       className={cn(
         "rounded-lg border transition-colors duration-200",
         listType === "unresolved"
@@ -392,20 +399,22 @@ function PatientListEntry({
       <div className="grid grid-cols-[56px_1fr_auto] items-start gap-2 p-3 lg:grid-cols-[84px_1fr_1fr_1fr_1fr_1.3fr_90px_1.2fr_100px_80px_40px] lg:items-center lg:gap-3">
         <div className="flex items-center gap-1">
           {listType === "cepod" ? (
-            <button
-              type="button"
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", patient.id);
-                onDragStart();
-              }}
-              onDragEnd={onDragEnd}
-              aria-label={`Drag patient ${position}`}
-              className="flex h-11 w-8 cursor-grab items-center justify-center rounded-md hover:bg-background/60 active:cursor-grabbing"
-            >
-              <GripVertical className="h-5 w-5" aria-hidden="true" />
-            </button>
+            canManageWorkflow ? (
+              <button
+                type="button"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", patient.id);
+                  onDragStart();
+                }}
+                onDragEnd={onDragEnd}
+                aria-label={`Drag patient ${position}`}
+                className="flex h-11 w-8 cursor-grab items-center justify-center rounded-md hover:bg-background/60 active:cursor-grabbing"
+              >
+                <GripVertical className="h-5 w-5" aria-hidden="true" />
+              </button>
+            ) : <span className="h-11 w-2" aria-hidden="true" />
           ) : listType === "planned" ? (
             <CalendarDays className="ml-2 h-5 w-5" aria-hidden="true" />
           ) : (
@@ -464,6 +473,7 @@ function PatientListEntry({
             delayReasons={delayReasons}
             listType={listType}
             moving={moving}
+            canManageWorkflow={canManageWorkflow}
             onMoveToCepod={onMoveToCepod}
             onMoveToPlanned={onMoveToPlanned}
           />
@@ -479,6 +489,7 @@ function ExpandedPatientCard({
   delayReasons,
   listType,
   moving,
+  canManageWorkflow,
   onMoveToCepod,
   onMoveToPlanned
 }: {
@@ -487,6 +498,7 @@ function ExpandedPatientCard({
   delayReasons: DelayReason[];
   listType: "cepod" | "planned" | "unresolved";
   moving: boolean;
+  canManageWorkflow: boolean;
   onMoveToCepod: () => void;
   onMoveToPlanned: () => void;
 }) {
@@ -544,7 +556,9 @@ function ExpandedPatientCard({
           <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
           {patient.elapsed_minutes}m in current stage
         </div>
-        {listType === "planned" ? (
+        {!canManageWorkflow ? (
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm font-semibold text-muted-foreground">This is a read-only operational view. Sign in with an authorised management account to update the pathway.</div>
+        ) : listType === "planned" ? (
           <Button type="button" size="lg" className="w-full" disabled={moving} onClick={onMoveToCepod}>
             {moving ? "Moving..." : "Move to CEPOD"}
           </Button>

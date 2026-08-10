@@ -27,7 +27,7 @@ export async function getTheatreConfiguration(options: { scoped?: boolean } = {}
 }
 
 export function scopeTheatreConfiguration(configuration: TheatreConfiguration, access: CurrentUserAccess) {
-  if (access.all_theatres || access.role === "administrator") return configuration;
+  if (!access.authenticated || access.all_theatres || access.role === "administrator") return configuration;
 
   const explicitlyAccessibleTheatres = configuration.theatres.filter((theatre) =>
     access.theatre_ids.includes(theatre.id) || access.suite_ids.includes(theatre.suite_id)

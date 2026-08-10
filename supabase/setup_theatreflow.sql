@@ -428,6 +428,13 @@ create table if not exists public.profile_theatre_access (
   primary key (profile_id, theatre_id)
 );
 
+create table if not exists public.profile_specialty_access (
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  specialty text not null,
+  created_at timestamptz not null default now(),
+  primary key (profile_id, specialty)
+);
+
 alter table public.patients
   add column if not exists theatre_id uuid references public.theatres(id) on delete restrict,
   add column if not exists recovery_area_id uuid references public.recovery_areas(id) on delete restrict;
@@ -457,6 +464,10 @@ on conflict (version) do update set name = excluded.name;
 
 insert into public.theatreflow_schema_migrations (version, name)
 values ('0010', 'Authentication roles, theatre suites and recovery access')
+on conflict (version) do update set name = excluded.name;
+
+insert into public.theatreflow_schema_migrations (version, name)
+values ('0011', 'Clinical lead specialty access and public operational views')
 on conflict (version) do update set name = excluded.name;
 
 delete from public.workflow_stages

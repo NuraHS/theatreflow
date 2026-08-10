@@ -74,7 +74,7 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" aria-hidden="true" />Theatre coordinator overview</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" aria-hidden="true" />Theatre overview</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">Choose a suite, then view all theatres together or isolate one theatre and its recovery flow.</p>
             </div>
             <div className="w-full space-y-2 lg:w-80">

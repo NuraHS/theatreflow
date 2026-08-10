@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ASSIGNABLE_ROLES } from "@/lib/constants/permissions";
 import { createClient } from "@/lib/supabase/client";
 import type { CurrentUserAccess } from "@/lib/types/domain";
 
@@ -19,7 +20,7 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
   const [loading, setLoading] = React.useState(false);
   const titleId = React.useId();
   const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const isAdministrator = access.authenticated && access.active && access.role === "administrator";
+  const isManagementUser = access.authenticated && access.active && ASSIGNABLE_ROLES.includes(access.role);
 
   React.useEffect(() => {
     if (!open) return;
@@ -84,18 +85,19 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
       .select("role,active")
       .eq("id", data.user.id)
       .maybeSingle();
+    const managementRole = profile?.role as CurrentUserAccess["role"] | undefined;
 
-    if (profileError || profile?.role !== "administrator" || profile.active === false) {
+    if (profileError || !managementRole || !ASSIGNABLE_ROLES.includes(managementRole) || profile?.active === false) {
       await supabase.auth.signOut();
       setLoading(false);
-      toast.error(profileError ? "The administrator profile could not be verified." : "This account does not have active administrator access.");
+      toast.error(profileError ? "The management profile could not be verified." : "This account does not have an active management role.");
       return;
     }
 
     setLoading(false);
     closeDialog();
-    toast.success("Administrator access confirmed.");
-    router.push("/admin");
+    toast.success("Management access confirmed.");
+    router.push(managementRole === "administrator" ? "/admin" : "/dashboards");
     router.refresh();
   }
 
@@ -104,11 +106,12 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
     router.push("/admin");
   }
 
-  if (isAdministrator) {
+  if (isManagementUser) {
+    const destination = access.role === "administrator" ? "/admin" : "/dashboards";
     return (
-      <Link href="/admin" className="flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+      <Link href={destination} className="flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
         <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-        Admin dashboard
+        {access.role === "administrator" ? "Admin dashboard" : "Management dashboard"}
       </Link>
     );
   }
@@ -127,8 +130,8 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <LockKeyhole className="h-6 w-6" aria-hidden="true" />
               </div>
-              <CardTitle id={titleId} className="text-xl">Administrator login</CardTitle>
-              <CardDescription>Sign in with an active Theatreflow administrator account. Operational staff accounts cannot enter the administration area.</CardDescription>
+              <CardTitle id={titleId} className="text-xl">Management login</CardTitle>
+              <CardDescription>Sign in with an active administrator, theatre manager, clinical lead, service manager or divisional leadership account.</CardDescription>
               <Button type="button" variant="ghost" size="icon" className="absolute right-4 top-4" aria-label="Close administrator login" onClick={closeDialog}>
                 <X className="h-5 w-5" aria-hidden="true" />
               </Button>
@@ -150,7 +153,7 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
                   <Input id="admin-password" name="password" type="password" autoComplete="current-password" required />
                 </div>
                 <Button type="submit" size="lg" className="w-full" disabled={loading}>
-                  {loading ? "Checking administrator access..." : "Sign in to Admin"}
+                  {loading ? "Checking management access..." : "Sign in to Admin"}
                 </Button>
               </form>
               {!enforced ? <Button type="button" variant="outline" className="w-full" onClick={openDemoDashboard}>Open demo Admin dashboard</Button> : null}

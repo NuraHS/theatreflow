@@ -29,8 +29,9 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const permissionsEnforced = process.env.THEATREFLOW_ENFORCE_ROLE_PERMISSIONS === "true";
   const pathname = request.nextUrl.pathname;
+  const publicOperationalPath = pathname === "/" || pathname === "/patients" || pathname === "/board" || pathname === "/dashboards";
 
-  if (permissionsEnforced && !user && pathname !== "/login" && !pathname.startsWith("/api/")) {
+  if (permissionsEnforced && !user && !publicOperationalPath && pathname !== "/login" && !pathname.startsWith("/api/")) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", pathname);

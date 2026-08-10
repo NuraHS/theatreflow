@@ -9,10 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { SUPPORTED_SPECIALTIES } from "@/lib/constants/clinical-teams";
 import { ASSIGNABLE_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/constants/permissions";
 import type { TheatreConfiguration, UserProfile, UserRole } from "@/lib/types/domain";
 
-type EditableAccess = Pick<UserProfile, "full_name" | "job_title" | "role" | "active" | "primary_suite_id" | "suite_ids" | "theatre_ids">;
+type EditableAccess = Pick<UserProfile, "full_name" | "job_title" | "role" | "active" | "primary_suite_id" | "suite_ids" | "theatre_ids" | "specialty_ids">;
 type NewUserAccess = Omit<EditableAccess, "full_name" | "job_title"> & { full_name: string; job_title: string; email: string; temporary_password: string };
 
 export function UserAccessPanel({ locations }: { locations: TheatreConfiguration }) {
@@ -25,11 +26,12 @@ export function UserAccessPanel({ locations }: { locations: TheatreConfiguration
     temporary_password: "",
     full_name: "",
     job_title: "",
-    role: "theatre_staff" as UserRole,
+    role: "administrator" as UserRole,
     active: true,
     primary_suite_id: locations.suites[0]?.id ?? null,
     suite_ids: [] as string[],
-    theatre_ids: locations.theatres[0]?.id ? [locations.theatres[0].id] : []
+    theatre_ids: locations.theatres[0]?.id ? [locations.theatres[0].id] : [],
+    specialty_ids: [] as string[]
   });
 
   const loadUsers = React.useCallback(async (announce = false) => {
@@ -61,7 +63,7 @@ export function UserAccessPanel({ locations }: { locations: TheatreConfiguration
     <div className="space-y-4">
       <Card className="border-cyan-300 dark:border-cyan-900">
         <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-6 w-6 text-primary" aria-hidden="true" /><div><h2 className="font-bold">Role and location controls</h2><p className="mt-1 max-w-3xl text-sm text-muted-foreground">Roles decide which pages and actions are available. Suite and theatre assignments decide which operational patient flows are visible.</p></div></div>
+          <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-6 w-6 text-primary" aria-hidden="true" /><div><h2 className="font-bold">Management access controls</h2><p className="mt-1 max-w-3xl text-sm text-muted-foreground">Roles decide which privileged pages are available. Theatre managers are scoped by suite and theatre; clinical leads are scoped by specialty.</p></div></div>
           <div className="flex gap-2"><Button type="button" variant="outline" disabled={loading} onClick={() => void loadUsers(true)}><RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />Refresh</Button><Button type="button" onClick={() => setShowCreate((current) => !current)}><Plus className="h-4 w-4" aria-hidden="true" />New user</Button></div>
         </CardContent>
       </Card>
@@ -75,9 +77,12 @@ export function UserAccessPanel({ locations }: { locations: TheatreConfiguration
               <FormField label="Job title"><Input value={newUser.job_title} onChange={(event) => setNewUser({ ...newUser, job_title: event.target.value })} /></FormField>
               <FormField label="Email address"><Input type="email" autoComplete="off" required value={newUser.email} onChange={(event) => setNewUser({ ...newUser, email: event.target.value })} /></FormField>
               <FormField label="Temporary password"><Input type="password" autoComplete="new-password" minLength={12} required value={newUser.temporary_password} onChange={(event) => setNewUser({ ...newUser, temporary_password: event.target.value })} /></FormField>
-              <RoleSelect value={newUser.role} onChange={(role) => setNewUser({ ...newUser, role })} />
-              <SuiteSelect locations={locations} value={newUser.primary_suite_id} onChange={(primary_suite_id) => setNewUser({ ...newUser, primary_suite_id })} />
-              <div className="md:col-span-2"><TheatreChecks locations={locations} selected={newUser.theatre_ids} suiteId={newUser.primary_suite_id} onChange={(theatre_ids) => setNewUser({ ...newUser, theatre_ids })} /></div>
+              <RoleSelect value={newUser.role} onChange={(role) => setNewUser({ ...newUser, role, ...(role === "clinical_lead" ? { primary_suite_id: null, suite_ids: [], theatre_ids: [] } : {}) })} />
+              {newUser.role === "clinical_lead" ? (
+                <div className="md:col-span-2"><SpecialtyChecks selected={newUser.specialty_ids} onChange={(specialty_ids) => setNewUser({ ...newUser, specialty_ids })} /></div>
+              ) : (
+                <><SuiteSelect locations={locations} value={newUser.primary_suite_id} onChange={(primary_suite_id) => setNewUser({ ...newUser, primary_suite_id })} /><div className="md:col-span-2"><TheatreChecks locations={locations} selected={newUser.theatre_ids} primarySuiteId={newUser.primary_suite_id} onChange={(theatre_ids) => setNewUser({ ...newUser, theatre_ids })} /></div></>
+              )}
               <Button type="submit" size="lg" className="md:col-span-2" disabled={creating}>{creating ? "Creating account..." : "Create account"}</Button>
             </form>
           </CardContent>
@@ -93,7 +98,7 @@ export function UserAccessPanel({ locations }: { locations: TheatreConfiguration
 }
 
 function UserAccessCard({ user, locations, onSaved }: { user: UserProfile; locations: TheatreConfiguration; onSaved: () => void }) {
-  const [profile, setProfile] = React.useState<EditableAccess>({ full_name: user.full_name, job_title: user.job_title, role: user.role, active: user.active, primary_suite_id: user.primary_suite_id, suite_ids: user.suite_ids, theatre_ids: user.theatre_ids });
+  const [profile, setProfile] = React.useState<EditableAccess>({ full_name: user.full_name, job_title: user.job_title, role: user.role, active: user.active, primary_suite_id: user.primary_suite_id, suite_ids: user.suite_ids, theatre_ids: user.theatre_ids, specialty_ids: user.specialty_ids ?? [] });
   const [saving, setSaving] = React.useState(false);
 
   async function save() {
@@ -110,8 +115,8 @@ function UserAccessCard({ user, locations, onSaved }: { user: UserProfile; locat
     <Card>
       <CardHeader className="pb-3"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted"><UserRound className="h-5 w-5" aria-hidden="true" /></span><div><CardTitle className="text-lg">{user.full_name || user.email}</CardTitle><p className="text-sm text-muted-foreground">{user.email}</p></div></div><Badge tone={profile.active ? "green" : "red"}>{profile.active ? "Active" : "Inactive"}</Badge></div></CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2"><FormField label="Full name"><Input value={profile.full_name ?? ""} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></FormField><FormField label="Job title"><Input value={profile.job_title ?? ""} onChange={(event) => setProfile({ ...profile, job_title: event.target.value })} /></FormField><RoleSelect value={profile.role} onChange={(role) => setProfile({ ...profile, role })} /><SuiteSelect locations={locations} value={profile.primary_suite_id} onChange={(primary_suite_id) => setProfile({ ...profile, primary_suite_id })} /></div>
-        <TheatreChecks locations={locations} selected={profile.theatre_ids} suiteId={profile.primary_suite_id} onChange={(theatre_ids) => setProfile({ ...profile, theatre_ids })} />
+        <div className="grid gap-3 sm:grid-cols-2"><FormField label="Full name"><Input value={profile.full_name ?? ""} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></FormField><FormField label="Job title"><Input value={profile.job_title ?? ""} onChange={(event) => setProfile({ ...profile, job_title: event.target.value })} /></FormField><RoleSelect value={profile.role} onChange={(role) => setProfile({ ...profile, role, ...(role === "clinical_lead" ? { primary_suite_id: null, suite_ids: [], theatre_ids: [] } : {}) })} />{profile.role === "clinical_lead" ? null : <SuiteSelect locations={locations} value={profile.primary_suite_id} onChange={(primary_suite_id) => setProfile({ ...profile, primary_suite_id })} />}</div>
+        {profile.role === "clinical_lead" ? <SpecialtyChecks selected={profile.specialty_ids} onChange={(specialty_ids) => setProfile({ ...profile, specialty_ids })} /> : <TheatreChecks locations={locations} selected={profile.theatre_ids} primarySuiteId={profile.primary_suite_id} onChange={(theatre_ids) => setProfile({ ...profile, theatre_ids })} />}
         <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3"><input type="checkbox" checked={profile.active} onChange={(event) => setProfile({ ...profile, active: event.target.checked })} /><span className="text-sm font-semibold">Account active</span></label>
         <Button type="button" className="w-full" disabled={saving} onClick={() => void save()}><Save className="h-4 w-4" aria-hidden="true" />{saving ? "Saving..." : "Save role and access"}</Button>
       </CardContent>
@@ -127,9 +132,12 @@ function SuiteSelect({ locations, value, onChange }: { locations: TheatreConfigu
   return <div className="space-y-2"><Label>Primary theatre suite</Label><Select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}><option value="">No primary suite</option>{locations.suites.map((suite) => <option key={suite.id} value={suite.id}>{suite.name}</option>)}</Select></div>;
 }
 
-function TheatreChecks({ locations, selected, suiteId, onChange }: { locations: TheatreConfiguration; selected: string[]; suiteId: string | null; onChange: (ids: string[]) => void }) {
-  const theatres = locations.theatres.filter((theatre) => !suiteId || theatre.suite_id === suiteId);
-  return <fieldset className="space-y-2"><legend className="text-sm font-semibold">Assigned theatres</legend><div className="flex flex-wrap gap-2">{theatres.map((theatre) => { const checked = selected.includes(theatre.id); return <label key={theatre.id} className={checked ? "flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-primary bg-cyan-50 px-3 text-sm font-semibold dark:bg-cyan-950/25" : "flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold hover:bg-muted"}><input type="checkbox" checked={checked} onChange={() => onChange(checked ? selected.filter((id) => id !== theatre.id) : [...selected, theatre.id])} />{theatre.name}</label>; })}</div><p className="text-xs text-muted-foreground">Theatre staff are limited to these theatres. Coordinators and theatre managers receive the whole selected suite.</p></fieldset>;
+function TheatreChecks({ locations, selected, primarySuiteId, onChange }: { locations: TheatreConfiguration; selected: string[]; primarySuiteId: string | null; onChange: (ids: string[]) => void }) {
+  return <fieldset className="space-y-3"><legend className="text-sm font-semibold">Assigned theatres</legend><div className="space-y-3">{[...locations.suites].sort((a, b) => a.display_order - b.display_order).map((suite) => { const theatres = locations.theatres.filter((theatre) => theatre.suite_id === suite.id).sort((a, b) => a.display_order - b.display_order); return <div key={suite.id} className="grid gap-3 rounded-lg border bg-muted/20 p-3 md:grid-cols-[180px_minmax(0,1fr)] md:items-start"><div><p className="font-bold">{suite.name}</p>{primarySuiteId === suite.id ? <Badge tone="blue" className="mt-2">Primary suite</Badge> : null}</div><div className="flex flex-wrap gap-2">{theatres.map((theatre) => { const checked = selected.includes(theatre.id); return <label key={theatre.id} className={checked ? "flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-primary bg-cyan-50 px-3 text-sm font-semibold dark:bg-cyan-950/25" : "flex min-h-11 cursor-pointer items-center gap-2 rounded-md border bg-card px-3 text-sm font-semibold hover:bg-muted"}><input type="checkbox" checked={checked} onChange={() => onChange(checked ? selected.filter((id) => id !== theatre.id) : [...selected, theatre.id])} />{theatre.name}</label>; })}</div></div>; })}</div><p className="text-xs text-muted-foreground">Choose the theatres this management account is responsible for. The suite name remains visible beside each group.</p></fieldset>;
+}
+
+function SpecialtyChecks({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
+  return <fieldset className="space-y-2"><legend className="text-sm font-semibold">Assigned specialties</legend><div className="flex flex-wrap gap-2">{SUPPORTED_SPECIALTIES.map((specialty) => { const checked = selected.includes(specialty); return <label key={specialty} className={checked ? "flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-primary bg-cyan-50 px-3 text-sm font-semibold dark:bg-cyan-950/25" : "flex min-h-11 cursor-pointer items-center gap-2 rounded-md border bg-card px-3 text-sm font-semibold hover:bg-muted"}><input type="checkbox" checked={checked} onChange={() => onChange(checked ? selected.filter((id) => id !== specialty) : [...selected, specialty])} />{specialty}</label>; })}</div><p className="text-xs text-muted-foreground">Clinical leads see patient and reporting data for the selected specialties across theatre suites.</p></fieldset>;
 }
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {

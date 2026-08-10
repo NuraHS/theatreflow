@@ -14,13 +14,11 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const ASSIGNABLE_ROLES: UserRole[] = [
-  "theatre_staff",
-  "theatre_coordinator",
-  "service_manager",
-  "clinical_lead",
+  "administrator",
   "theatre_manager",
+  "clinical_lead",
+  "service_manager",
   "divisional_leadership",
-  "administrator"
 ];
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
@@ -39,12 +37,13 @@ export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
 export const PERMISSIONS = {
   viewPatients: ["administrator", "theatre_manager", "theatre_coordinator", "service_manager", "clinical_lead", "theatre_staff", "manager", "consultant", "read_only_auditor"],
   viewLiveBoard: ["administrator", "theatre_manager", "theatre_coordinator", "service_manager", "clinical_lead", "theatre_staff", "manager", "consultant"],
-  advanceWorkflow: ["administrator", "theatre_manager", "theatre_coordinator", "clinical_lead", "theatre_staff", "manager", "consultant"],
-  createPatients: ["administrator", "theatre_manager", "theatre_coordinator", "clinical_lead", "theatre_staff", "manager", "consultant"],
+  advanceWorkflow: ["administrator", "theatre_manager", "theatre_coordinator", "theatre_staff", "manager", "consultant"],
+  createPatients: ["administrator", "theatre_manager", "theatre_coordinator", "theatre_staff", "manager", "consultant"],
   viewDashboards: ["administrator", "theatre_manager", "theatre_coordinator", "service_manager", "clinical_lead", "divisional_leadership", "manager", "consultant", "read_only_auditor"],
+  viewInsights: ["administrator", "theatre_manager", "service_manager", "clinical_lead", "divisional_leadership", "manager", "consultant", "read_only_auditor"],
   manageSettings: ["administrator"],
   manageUsers: ["administrator"],
-  exportReports: ["administrator", "theatre_manager", "service_manager", "clinical_lead", "manager", "read_only_auditor"],
+  exportReports: ["administrator", "theatre_manager", "service_manager", "clinical_lead", "divisional_leadership", "manager", "read_only_auditor"],
   viewSystemHealth: ["administrator"],
   viewSystemDiagnostics: ["administrator"]
 } satisfies Record<string, UserRole[]>;

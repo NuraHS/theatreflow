@@ -12,7 +12,7 @@ const nav: Array<{ href: string; label: string; icon: typeof Activity; permissio
   { href: "/board", label: "Live Board", icon: LayoutDashboard, permission: "viewLiveBoard" },
   { href: "/dashboards", label: "Dashboards", icon: BarChart3, permission: "viewDashboards" },
   { href: "/reports", label: "Reports", icon: FileDown, permission: "exportReports" },
-  { href: "/insights", label: "Insights", icon: Sparkles, permission: "viewDashboards" },
+  { href: "/insights", label: "Insights", icon: Sparkles, permission: "viewInsights" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "manageSettings" }
 ];
 
