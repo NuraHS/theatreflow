@@ -24,7 +24,7 @@ export function activeInfrastructureEventIds(events: InfrastructureEvent[], time
 }
 
 export function requiresDelayCapture(elapsedMinutes: number, stage: WorkflowStage) {
-  return elapsedMinutes > stage.delay_threshold_minutes;
+  return stage.delay_threshold_minutes > 0 && elapsedMinutes > stage.delay_threshold_minutes;
 }
 
 function normaliseStageValue(value: string) {

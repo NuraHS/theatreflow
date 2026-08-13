@@ -1,6 +1,7 @@
 import type { PatientWithStage } from "@/lib/types/domain";
 
 export function getDelayStatus(elapsed: number, threshold: number): PatientWithStage["delay_status"] {
+  if (threshold <= 0) return "green";
   if (elapsed >= threshold * 1.5) return "red";
   if (elapsed >= threshold) return "amber";
   return "green";

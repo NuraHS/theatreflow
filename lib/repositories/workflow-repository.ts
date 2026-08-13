@@ -191,7 +191,9 @@ export async function getPatientListMovements(): Promise<PatientListMovement[]> 
 }
 
 function normaliseCepodStages(stages: WorkflowStage[]) {
-  const withoutDecisionStage = stages.filter((stage) => stage.id !== "decision-to-operate");
+  const withoutDecisionStage = stages
+    .filter((stage) => stage.id !== "decision-to-operate")
+    .map((stage) => stage.id === "patient-on-list" ? { ...stage, delay_threshold_minutes: 0 } : stage);
   const hasPatientOnList = withoutDecisionStage.some((stage) => stage.id === "patient-on-list");
   const patientOnList = DEFAULT_WORKFLOW_STAGES.find((stage) => stage.id === "patient-on-list");
 

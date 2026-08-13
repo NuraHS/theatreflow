@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock, GripVertical, QrCode, Search, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock, DoorOpen, GripVertical, QrCode, Search, UserRound, XCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { AdvancePatientButton } from "@/components/workflow/advance-patient-button";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { DelayReason, PatientWithStage, RecoveryArea, Theatre, TheatreSuite, WorkflowStage } from "@/lib/types/domain";
 import { getNextStage } from "@/lib/services/workflow-engine";
@@ -45,6 +46,7 @@ export function CepodWorkflow({
   const refreshPatients = React.useCallback(() => router.refresh(), [router]);
   useRealtimeWorkflow(refreshPatients);
   const [query, setQuery] = React.useState("");
+  const [selectedSuiteId, setSelectedSuiteId] = React.useState("all");
   const [selectedTheatreNumber, setSelectedTheatreNumber] = React.useState<"all" | number>("all");
   const [expandedId, setExpandedId] = React.useState("");
   const [orderedIds, setOrderedIds] = React.useState(() => patients.map((patient) => patient.id));
@@ -105,11 +107,30 @@ export function CepodWorkflow({
     () => new Map(theatres.map((theatre) => [theatre.id, theatre.display_order])),
     [theatres]
   );
+  const theatreLocationById = React.useMemo(
+    () => {
+      const suiteNameById = new Map(suites.map((suite) => [suite.id, suite.name]));
+      return new Map(
+        theatres.map((theatre) => [
+          theatre.id,
+          {
+            suiteId: theatre.suite_id,
+            suiteName: suiteNameById.get(theatre.suite_id) ?? "Suite not assigned",
+            theatreName: theatre.name
+          }
+        ])
+      );
+    },
+    [suites, theatres]
+  );
   const cepodFilteredPatients = cepodPatients.filter(
-    (patient) =>
-      matchesQuery(patient) &&
-      (selectedTheatreNumber === "all" ||
-        (patient.theatre_id ? theatreNumberById.get(patient.theatre_id) === selectedTheatreNumber : false))
+    (patient) => {
+      const location = patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined;
+      const matchesSuite = selectedSuiteId === "all" || location?.suiteId === selectedSuiteId;
+      const matchesTheatre = selectedTheatreNumber === "all" ||
+        (patient.theatre_id ? theatreNumberById.get(patient.theatre_id) === selectedTheatreNumber : false);
+      return matchesQuery(patient) && matchesSuite && matchesTheatre;
+    }
   );
   const plannedFilteredPatients = plannedPatients.filter(matchesQuery);
   const unresolvedFilteredPatients = unresolvedPatients.filter(matchesQuery);
@@ -169,7 +190,14 @@ export function CepodWorkflow({
   return (
     <div className="space-y-4">
       <TheatreFilterTabs
+        suites={suites}
+        selectedSuiteId={selectedSuiteId}
         selectedTheatreNumber={selectedTheatreNumber}
+        onSelectSuite={(suiteId) => {
+          setSelectedSuiteId(suiteId);
+          setSelectedTheatreNumber("all");
+          setExpandedId("");
+        }}
         onSelect={(theatreNumber) => {
           setSelectedTheatreNumber(theatreNumber);
           setExpandedId("");
@@ -184,12 +212,13 @@ export function CepodWorkflow({
         query={query}
         onQueryChange={setQuery}
         patients={cepodFilteredPatients}
-        emptyMessage={selectedTheatreNumber === "all" ? "No CEPOD patients match this search." : `No CEPOD patients are listed for Theatre ${selectedTheatreNumber}.`}
+        emptyMessage="No CEPOD patients match the selected suite, theatre or search."
         renderPatient={(patient, index) => (
           <PatientListEntry
             key={patient.id}
             listType="cepod"
             patient={patient}
+            theatreLocation={patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined}
             stages={stages}
             delayReasons={delayReasons}
             position={index + 1}
@@ -224,6 +253,7 @@ export function CepodWorkflow({
             key={patient.id}
             listType="planned"
             patient={patient}
+            theatreLocation={patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined}
             stages={stages}
             delayReasons={delayReasons}
             firstColumnValue={formatShortDate(getOperationDate(patient))}
@@ -262,6 +292,7 @@ export function CepodWorkflow({
             key={patient.id}
             listType="unresolved"
             patient={patient}
+            theatreLocation={patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined}
             stages={stages}
             delayReasons={delayReasons}
             firstColumnValue="Review"
@@ -283,10 +314,16 @@ export function CepodWorkflow({
 }
 
 function TheatreFilterTabs({
+  suites,
+  selectedSuiteId,
   selectedTheatreNumber,
+  onSelectSuite,
   onSelect
 }: {
+  suites: TheatreSuite[];
+  selectedSuiteId: string;
   selectedTheatreNumber: "all" | number;
+  onSelectSuite: (suiteId: string) => void;
   onSelect: (theatreNumber: "all" | number) => void;
 }) {
   const tabs: Array<{ value: "all" | number; label: string }> = [
@@ -295,33 +332,44 @@ function TheatreFilterTabs({
   ];
 
   return (
-    <div
-      className="flex flex-wrap gap-2 pt-1"
-      role="tablist"
-      aria-label="Filter CEPOD list by theatre"
-      data-testid="cepod-theatre-filter"
-    >
-      {tabs.map((tab) => {
-        const selected = selectedTheatreNumber === tab.value;
-        return (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            aria-controls="cepod-list"
-            className={cn(
-              "clinical-card min-h-11 cursor-pointer rounded-lg border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors",
-              selected
-                ? "border-primary bg-cyan-50 text-primary dark:bg-cyan-950/30"
-                : "hover:border-primary hover:bg-muted"
-            )}
-            onClick={() => onSelect(tab.value)}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      <Select
+        value={selectedSuiteId}
+        onChange={(event) => onSelectSuite(event.target.value)}
+        aria-label="Filter CEPOD list by theatre suite"
+        className="clinical-card w-auto min-w-52 rounded-lg bg-card font-semibold"
+      >
+        <option value="all">All accessible suites</option>
+        {suites.map((suite) => <option key={suite.id} value={suite.id}>{suite.name}</option>)}
+      </Select>
+      <div
+        className="flex flex-wrap gap-2"
+        role="tablist"
+        aria-label="Filter CEPOD list by theatre"
+        data-testid="cepod-theatre-filter"
+      >
+        {tabs.map((tab) => {
+          const selected = selectedTheatreNumber === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls="cepod-list"
+              className={cn(
+                "clinical-card min-h-11 cursor-pointer rounded-lg border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors",
+                selected
+                  ? "border-primary bg-cyan-50 text-primary dark:bg-cyan-950/30"
+                  : "hover:border-primary hover:bg-muted"
+              )}
+              onClick={() => onSelect(tab.value)}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -392,8 +440,9 @@ function PatientListCard({
         </div>
       </CardHeader>
       {contentVisible ? <CardContent id={contentId} className="space-y-3">
-        <div className="hidden rounded-md border bg-muted/70 px-3 py-2 text-xs font-bold uppercase tracking-normal text-muted-foreground lg:grid lg:grid-cols-[84px_1fr_1fr_1fr_1fr_1.3fr_90px_1.2fr_100px_80px_40px] lg:gap-3">
+        <div className="hidden rounded-md border bg-muted/70 px-3 py-2 text-xs font-bold uppercase tracking-normal text-muted-foreground xl:grid xl:grid-cols-[72px_128px_100px_100px_105px_105px_minmax(130px,1.2fr)_64px_105px_80px_58px_36px] xl:gap-2">
           <span>{firstColumnHeader}</span>
+          <span>Suite / theatre</span>
           <span>Hospital no.</span>
           <span>Patient</span>
           <span>Specialty</span>
@@ -419,6 +468,7 @@ function PatientListCard({
 function PatientListEntry({
   listType,
   patient,
+  theatreLocation,
   stages,
   delayReasons,
   position,
@@ -436,6 +486,7 @@ function PatientListEntry({
 }: {
   listType: "cepod" | "planned" | "unresolved";
   patient: PatientWithStage;
+  theatreLocation?: { suiteId: string; suiteName: string; theatreName: string };
   stages: WorkflowStage[];
   delayReasons: DelayReason[];
   position?: number;
@@ -466,7 +517,7 @@ function PatientListEntry({
         dragging && "opacity-50"
       )}
     >
-      <div className="grid grid-cols-[56px_1fr_auto] items-start gap-2 p-3 lg:grid-cols-[84px_1fr_1fr_1fr_1fr_1.3fr_90px_1.2fr_100px_80px_40px] lg:items-center lg:gap-3">
+      <div className="grid grid-cols-[56px_1fr_auto] items-start gap-2 p-3 xl:grid-cols-[72px_128px_100px_100px_105px_105px_minmax(130px,1.2fr)_64px_105px_80px_58px_36px] xl:items-center xl:gap-2">
         <div className="flex items-center gap-1">
           {listType === "cepod" ? (
             canManageWorkflow ? (
@@ -493,30 +544,46 @@ function PatientListEntry({
           <span className="min-w-6 text-center text-sm font-bold">{firstColumnValue}</span>
         </div>
 
-        <div className="min-h-11 text-left lg:contents">
-          <div>
-            <p className="text-base font-bold">{patient.hospital_number}</p>
-            <p className="text-sm font-semibold lg:hidden">{patient.patient_name || "Patient name not recorded"}</p>
+        <div className="min-h-11 text-left xl:contents">
+          <div className="hidden min-w-0 xl:block">
+            <p className="text-sm font-semibold leading-tight" title={theatreLocation?.suiteName ?? "Suite not assigned"}>
+              {theatreLocation?.suiteName ?? "Suite not assigned"}
+            </p>
+            <TheatreBadge theatreName={theatreLocation?.theatreName ?? "Theatre not assigned"} />
           </div>
-          <div className="hidden lg:block">{patient.patient_name || "Not recorded"}</div>
-          <div className="hidden lg:block">{patient.specialty}</div>
-          <div className="hidden lg:block">{patient.consultant}</div>
-          <div className="hidden min-w-0 lg:block">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-baseline gap-4 xl:block">
+              <p className="shrink-0 text-base font-bold">{patient.hospital_number}</p>
+              <p className="min-w-0 truncate text-sm font-semibold xl:hidden" title={patient.patient_name || "Patient name not recorded"}>
+                {patient.patient_name || "Patient name not recorded"}
+              </p>
+            </div>
+            <div className="mt-1 flex min-w-0 items-center gap-2 xl:hidden">
+              <p className="min-w-0 truncate text-xs font-semibold leading-tight text-muted-foreground" title={theatreLocation?.suiteName ?? "Suite not assigned"}>
+                {theatreLocation?.suiteName ?? "Suite not assigned"}
+              </p>
+              <TheatreBadge theatreName={theatreLocation?.theatreName ?? "Theatre not assigned"} />
+            </div>
+          </div>
+          <div className="hidden xl:block">{patient.patient_name || "Not recorded"}</div>
+          <div className="hidden xl:block">{patient.specialty}</div>
+          <div className="hidden xl:block">{patient.consultant}</div>
+          <div className="hidden min-w-0 xl:block">
             <p className="truncate">{patient.procedure}</p>
           </div>
-          <div className="hidden lg:block">
+          <div className="hidden xl:block">
             <Badge tone={priorityTone(patient.cepod_priority)}>{priorityLabel(patient.cepod_priority)}</Badge>
           </div>
-          <div className="hidden lg:block">{patient.stage.name}</div>
-          <div className="hidden font-semibold lg:block">{stageStartedClock(patient)}</div>
-          <div className="hidden font-semibold lg:block">{patient.elapsed_minutes}m</div>
+          <div className="hidden xl:block">{patient.stage.name}</div>
+          <div className="hidden font-semibold xl:block">{stageStartedClock(patient)}</div>
+          <div className="hidden font-semibold xl:block">{patient.elapsed_minutes}m</div>
         </div>
 
         <button type="button" onClick={onToggle} aria-label={expanded ? "Collapse patient details" : "Expand patient details"} className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md hover:bg-background/60">
           <ChevronDown className={cn("h-5 w-5 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
         </button>
 
-        <div className="col-span-3 grid grid-cols-2 gap-2 text-sm lg:hidden">
+        <div className="col-span-3 grid grid-cols-2 gap-2 text-sm xl:hidden">
           <Info label="Specialty" value={patient.specialty} />
           <Info label="Consultant" value={patient.consultant} />
           <Info label="Procedure" value={patient.procedure} className="col-span-2" />
@@ -550,6 +617,15 @@ function PatientListEntry({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function TheatreBadge({ theatreName }: { theatreName: string }) {
+  return (
+    <Badge tone="blue" className="max-w-full shrink-0 gap-1 whitespace-nowrap px-2 py-0.5 text-xs leading-none xl:mt-1">
+      <DoorOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">{theatreName}</span>
+    </Badge>
   );
 }
 
@@ -740,9 +816,9 @@ function InfoBlock({ icon, label, value, className }: { icon?: React.ReactNode; 
 
 function Info({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className={className}>
-      <p className="text-xs font-semibold uppercase tracking-normal opacity-75">{label}</p>
-      <p className="break-words font-semibold">{value}</p>
+    <div className={cn("min-w-0 sm:flex sm:items-baseline sm:gap-2", className)}>
+      <p className="shrink-0 text-xs font-semibold uppercase tracking-normal opacity-75">{label}</p>
+      <p className="min-w-0 break-words font-semibold">{value}</p>
     </div>
   );
 }

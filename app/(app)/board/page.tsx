@@ -21,7 +21,7 @@ export default async function BoardPage() {
           </div>
           <p className="mt-1 text-sm text-muted-foreground">Realtime column view for desktop displays and coordinators.</p>
         </div>
-        <p className="text-sm font-semibold text-muted-foreground">Green, amber and red reflect each stage threshold.</p>
+        <p className="text-sm font-semibold text-muted-foreground">Green, amber and red reflect timed stage thresholds. Waiting-list time has no automatic limit; delays are recorded by staff when applicable.</p>
       </section>
       <LiveBoard patients={patients} locations={locations} />
     </div>

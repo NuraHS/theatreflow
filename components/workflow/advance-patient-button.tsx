@@ -29,6 +29,7 @@ export function AdvancePatientButton({
   const [loading, setLoading] = React.useState(false);
   const currentElapsedMinutes = elapsedMinutes ?? patient.elapsed_minutes;
   const needsDelay = requiresDelayCapture(currentElapsedMinutes, patient.stage);
+  const hasNoAutomaticLimit = patient.stage.delay_threshold_minutes <= 0;
 
   async function advance(reasonIds = selectedReasons, delayComments = comments) {
     setLoading(true);
@@ -60,7 +61,8 @@ export function AdvancePatientButton({
 
   function onPrimaryClick() {
     if (!nextStage) return;
-    if (needsDelay) {
+    if (needsDelay || hasNoAutomaticLimit) {
+      setDelay(hasNoAutomaticLimit ? "no" : null);
       setOpen(true);
       return;
     }
@@ -85,7 +87,9 @@ export function AdvancePatientButton({
               <div>
                 <h2 className="text-lg font-bold">Delay capture</h2>
                 <p className="text-sm text-muted-foreground">
-                  {currentElapsedMinutes} minutes elapsed in {patient.stage.name}. Threshold is {patient.stage.delay_threshold_minutes} minutes.
+                  {hasNoAutomaticLimit
+                    ? "There is no automatic time limit while this patient is waiting for surgery. Record a delay only if an issue prevented the patient from being sent for."
+                    : `${currentElapsedMinutes} minutes elapsed in ${patient.stage.name}. Threshold is ${patient.stage.delay_threshold_minutes} minutes.`}
                 </p>
               </div>
               <Button type="button" variant="ghost" size="icon" aria-label="Close delay capture" onClick={() => setOpen(false)}>

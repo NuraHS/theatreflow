@@ -9,7 +9,7 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
     name: "Patient on list",
     display_order: 1,
     colour: "#64748b",
-    delay_threshold_minutes: 30,
+    delay_threshold_minutes: 0,
     board_band: "Waiting"
   },
   {

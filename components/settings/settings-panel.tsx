@@ -26,7 +26,8 @@ export function SettingsPanel({ stages, delayReasons }: { stages: WorkflowStage[
               </div>
               <div>
                 <Label htmlFor={`${stage.id}-threshold`}>Threshold</Label>
-                <Input id={`${stage.id}-threshold`} type="number" defaultValue={stage.delay_threshold_minutes} />
+                <Input id={`${stage.id}-threshold`} type="number" min="0" defaultValue={stage.delay_threshold_minutes} />
+                {stage.delay_threshold_minutes <= 0 ? <p className="mt-1 text-xs text-muted-foreground">No automatic time limit</p> : null}
               </div>
               <div>
                 <Label htmlFor={`${stage.id}-colour`}>Colour</Label>

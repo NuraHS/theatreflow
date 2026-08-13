@@ -42,7 +42,7 @@ where workflow_id = 'cepod-emergency-theatres';
 
 insert into public.workflow_stages (id, workflow_id, name, display_order, colour, delay_threshold_minutes, board_band)
 values
-  ('patient-on-list', 'cepod-emergency-theatres', 'Patient on list', 1, '#64748b', 30, 'Waiting'),
+  ('patient-on-list', 'cepod-emergency-theatres', 'Patient on list', 1, '#64748b', 0, 'Waiting'),
   ('sent-for', 'cepod-emergency-theatres', 'Patient Sent For', 2, '#0891b2', 20, 'Sent For'),
   ('patient-arrived', 'cepod-emergency-theatres', 'Patient Arrived in Anaesthetic Room', 3, '#2563eb', 15, 'Arrived'),
   ('anaesthetic-started', 'cepod-emergency-theatres', 'Anaesthetic Started', 4, '#7c3aed', 35, 'Anaesthetic'),
