@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock, DoorOpen, GripVertical, QrCode, Search, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock, DoorOpen, GripVertical, Pencil, QrCode, Search, UserRound, XCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { AdvancePatientButton } from "@/components/workflow/advance-patient-button";
@@ -693,7 +693,7 @@ function ExpandedPatientCard({
         <InfoBlock label="Consultant" value={patient.consultant} />
         <InfoBlock label="Procedure" value={patient.procedure} />
         <InfoBlock label="Current stage" value={patient.stage.name} />
-        <InfoBlock label="Stage started" value={stageStartedClock(patient)} />
+        <StageStartedEditor patient={patient} canManageWorkflow={canManageWorkflow} />
         <InfoBlock label="Next stage" value={nextStage?.name ?? "Workflow complete"} className="sm:col-span-2 xl:col-span-1" />
       </div>
 
@@ -812,6 +812,82 @@ function InfoBlock({ icon, label, value, className }: { icon?: React.ReactNode; 
       <p className="mt-1 font-bold">{value}</p>
     </div>
   );
+}
+
+function StageStartedEditor({ patient, canManageWorkflow }: { patient: PatientWithStage; canManageWorkflow: boolean }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [stageStartedAt, setStageStartedAt] = React.useState(() => toDateTimeLocal(new Date(patient.last_event?.timestamp ?? patient.created_at)));
+  const [saving, setSaving] = React.useState(false);
+
+  async function save() {
+    if (!patient.last_event) return toast.error("This stage does not have a workflow timestamp to amend.");
+    setSaving(true);
+    const response = await fetch("/api/workflow/event-time", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patient_id: patient.id,
+        event_id: patient.last_event.id,
+        stage_started_at: new Date(stageStartedAt).toISOString()
+      })
+    });
+    const result = (await response.json()) as { error?: string; demo?: boolean };
+    setSaving(false);
+    if (!response.ok) return toast.error(result.error ?? "Unable to amend the stage start time");
+    toast.success(result.demo ? "Demo stage start time amended." : "Stage start time amended.");
+    setOpen(false);
+    router.refresh();
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!canManageWorkflow}
+        onClick={() => {
+          setStageStartedAt(toDateTimeLocal(new Date(patient.last_event?.timestamp ?? patient.created_at)));
+          setOpen(true);
+        }}
+        className="cursor-pointer rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-muted disabled:cursor-default disabled:hover:border-border disabled:hover:bg-card"
+        aria-label={`Amend start time for ${patient.stage.name}`}
+      >
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground">
+          Stage started
+          {canManageWorkflow ? <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+        </p>
+        <p className="mt-1 font-bold">{stageStartedClock(patient)}</p>
+      </button>
+      {open ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-cyan-950/40 p-3 sm:items-center sm:justify-center">
+          <div role="dialog" aria-modal="true" aria-labelledby={`amend-stage-title-${patient.id}`} className="w-full rounded-lg border bg-background p-4 shadow-2xl sm:max-w-md sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id={`amend-stage-title-${patient.id}`} className="text-lg font-bold">Amend stage start time</h2>
+                <p className="text-sm text-muted-foreground">{patient.stage.name}</p>
+              </div>
+              <Button type="button" variant="ghost" size="icon" aria-label="Close amend start time" onClick={() => setOpen(false)}>
+                <XCircle className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            </div>
+            <label htmlFor={`amend-stage-time-${patient.id}`} className="mt-4 block text-sm font-semibold">
+              Stage started
+              <Input id={`amend-stage-time-${patient.id}`} type="datetime-local" max={toDateTimeLocal(new Date())} value={stageStartedAt} onChange={(event) => setStageStartedAt(event.target.value)} className="mt-1" />
+            </label>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="button" disabled={saving || !stageStartedAt} onClick={() => void save()}>{saving ? "Saving..." : "Save amended time"}</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function toDateTimeLocal(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function Info({ label, value, className }: { label: string; value: string; className?: string }) {

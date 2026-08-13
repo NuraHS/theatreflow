@@ -260,6 +260,30 @@ create table if not exists public.audit_log (
   new_value jsonb
 );
 
+create or replace function public.write_audit_log()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.audit_log(table_name, row_id, action, user_id, old_value, new_value)
+  values (
+    tg_table_name,
+    coalesce(new.id::text, old.id::text),
+    tg_op,
+    auth.uid(),
+    case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
+    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
+  );
+  return coalesce(new, old);
+end;
+$$;
+
+drop trigger if exists workflow_events_audit on public.workflow_events;
+create trigger workflow_events_audit after insert or update on public.workflow_events
+for each row execute function public.write_audit_log();
+
 create index if not exists patients_created_at_idx on public.patients(created_at desc);
 create index if not exists patients_current_stage_idx on public.patients(current_stage);
 create index if not exists patients_hospital_number_idx on public.patients(hospital_number);

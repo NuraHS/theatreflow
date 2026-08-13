@@ -23,7 +23,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Patient is already at the final workflow stage." }, { status: 400 });
   }
 
-  const timestamp = new Date();
+  const now = new Date();
+  const timestamp = payload.stage_started_at ? new Date(payload.stage_started_at) : now;
+  if (Number.isNaN(timestamp.getTime())) {
+    return NextResponse.json({ error: "The stage start time is invalid." }, { status: 400 });
+  }
+  if (timestamp.getTime() > now.getTime() + 60_000) {
+    return NextResponse.json({ error: "The stage start time cannot be in the future." }, { status: 400 });
+  }
   const infrastructure_event_ids = activeInfrastructureEventIds(await getInfrastructureEvents(), timestamp);
 
   if (!supabase) {
@@ -39,6 +46,17 @@ export async function POST(request: Request) {
   const {
     data: { user }
   } = authSupabase ? await authSupabase.auth.getUser() : { data: { user: null } };
+
+  const { data: latestEvent } = await supabase
+    .from("workflow_events")
+    .select("timestamp")
+    .eq("patient_id", payload.patient_id)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestEvent?.timestamp && timestamp.getTime() < Date.parse(latestEvent.timestamp)) {
+    return NextResponse.json({ error: "The next stage cannot start before the current stage started." }, { status: 400 });
+  }
 
   const patientUpdate = nextStage.id === "patient-out-of-recovery"
     ? {

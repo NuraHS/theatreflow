@@ -6,6 +6,7 @@ import { ArrowRight, Mic, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DelayReason, PatientWithStage, WorkflowStage } from "@/lib/types/domain";
 import { requiresDelayCapture } from "@/lib/services/workflow-engine";
@@ -26,6 +27,7 @@ export function AdvancePatientButton({
   const [delay, setDelay] = React.useState<"yes" | "no" | null>(null);
   const [selectedReasons, setSelectedReasons] = React.useState<string[]>([]);
   const [comments, setComments] = React.useState("");
+  const [stageStartedAt, setStageStartedAt] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const currentElapsedMinutes = elapsedMinutes ?? patient.elapsed_minutes;
   const needsDelay = requiresDelayCapture(currentElapsedMinutes, patient.stage);
@@ -41,7 +43,8 @@ export function AdvancePatientButton({
         patient_id: patient.id,
         current_stage_id: patient.current_stage,
         delay_reason_ids: reasonIds,
-        delay_comments: delayComments
+        delay_comments: delayComments,
+        stage_started_at: stageStartedAt ? new Date(stageStartedAt).toISOString() : new Date().toISOString()
       })
     });
     const result = (await response.json()) as { error?: string; demo?: boolean };
@@ -57,17 +60,15 @@ export function AdvancePatientButton({
     setDelay(null);
     setSelectedReasons([]);
     setComments("");
+    setStageStartedAt("");
     router.refresh();
   }
 
   function onPrimaryClick() {
     if (!nextStage) return;
-    if (needsDelay || hasNoAutomaticLimit) {
-      setDelay(hasNoAutomaticLimit ? "no" : null);
-      setOpen(true);
-      return;
-    }
-    void advance([], "");
+    setDelay(needsDelay ? null : "no");
+    setStageStartedAt(toDateTimeLocal(new Date()));
+    setOpen(true);
   }
 
   function toggleReason(id: string) {
@@ -83,20 +84,40 @@ export function AdvancePatientButton({
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-end bg-cyan-950/40 p-3 sm:items-center sm:justify-center">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-lg border bg-background p-4 shadow-2xl sm:max-w-2xl sm:p-5">
+          <div
+            aria-labelledby={`record-stage-title-${patient.id}`}
+            aria-modal="true"
+            className="max-h-[92vh] w-full overflow-y-auto rounded-lg border bg-background p-4 shadow-2xl sm:max-w-2xl sm:p-5"
+            role="dialog"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold">Delay capture</h2>
+                <h2 className="text-lg font-bold" id={`record-stage-title-${patient.id}`}>
+                  Record {nextStage?.name}
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   {hasNoAutomaticLimit
                     ? noAutomaticLimitMessage
                     : `${currentElapsedMinutes} minutes elapsed in ${patient.stage.name}. Threshold is ${patient.stage.delay_threshold_minutes} minutes.`}
                 </p>
               </div>
-              <Button type="button" variant="ghost" size="icon" aria-label="Close delay capture" onClick={() => setOpen(false)}>
+              <Button type="button" variant="ghost" size="icon" aria-label="Close workflow update" onClick={() => setOpen(false)}>
                 <X className="h-5 w-5" aria-hidden="true" />
               </Button>
             </div>
+
+            <label htmlFor={`stage-started-${patient.id}`} className="mt-4 block text-sm font-semibold">
+              Amend start time
+              <Input
+                id={`stage-started-${patient.id}`}
+                type="datetime-local"
+                max={toDateTimeLocal(new Date())}
+                value={stageStartedAt}
+                onChange={(event) => setStageStartedAt(event.target.value)}
+                className="mt-1"
+              />
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">Defaults to the current time. Change it if this stage was recorded late.</span>
+            </label>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Button type="button" variant={delay === "yes" ? "default" : "outline"} onClick={() => setDelay("yes")}>Delay: Yes</Button>
@@ -164,4 +185,9 @@ function getNoAutomaticLimitMessage(stage: WorkflowStage) {
     return "An operation can take as long as clinically required, so there is no automatic time limit. Record a delay only if a specific issue affected this stage.";
   }
   return `There is no automatic time limit during ${stage.name}. Record a delay only if a specific issue affected this stage.`;
+}
+
+function toDateTimeLocal(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }

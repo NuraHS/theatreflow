@@ -17,7 +17,14 @@ export const advanceWorkflowSchema = z.object({
   patient_id: z.string().min(1),
   current_stage_id: z.string().min(1),
   delay_reason_ids: z.array(z.string()).default([]),
-  delay_comments: z.string().optional()
+  delay_comments: z.string().optional(),
+  stage_started_at: z.string().datetime().optional()
+});
+
+export const amendStageStartedSchema = z.object({
+  patient_id: z.string().min(1),
+  event_id: z.string().min(1),
+  stage_started_at: z.string().datetime()
 });
 
 export type CreatePatientInput = z.infer<typeof createPatientSchema>;
