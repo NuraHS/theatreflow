@@ -30,6 +30,7 @@ export function AdvancePatientButton({
   const currentElapsedMinutes = elapsedMinutes ?? patient.elapsed_minutes;
   const needsDelay = requiresDelayCapture(currentElapsedMinutes, patient.stage);
   const hasNoAutomaticLimit = patient.stage.delay_threshold_minutes <= 0;
+  const noAutomaticLimitMessage = getNoAutomaticLimitMessage(patient.stage);
 
   async function advance(reasonIds = selectedReasons, delayComments = comments) {
     setLoading(true);
@@ -88,7 +89,7 @@ export function AdvancePatientButton({
                 <h2 className="text-lg font-bold">Delay capture</h2>
                 <p className="text-sm text-muted-foreground">
                   {hasNoAutomaticLimit
-                    ? "There is no automatic time limit while this patient is waiting for surgery. Record a delay only if an issue prevented the patient from being sent for."
+                    ? noAutomaticLimitMessage
                     : `${currentElapsedMinutes} minutes elapsed in ${patient.stage.name}. Threshold is ${patient.stage.delay_threshold_minutes} minutes.`}
                 </p>
               </div>
@@ -150,4 +151,17 @@ export function AdvancePatientButton({
       ) : null}
     </>
   );
+}
+
+function getNoAutomaticLimitMessage(stage: WorkflowStage) {
+  if (stage.id === "patient-on-list") {
+    return "There is no automatic time limit while this patient is waiting for surgery. Record a delay only if an issue prevented the patient from being sent for.";
+  }
+  if (stage.id === "anaesthetic-started") {
+    return "Anaesthesia can take as long as clinically required, so there is no automatic time limit. Record a delay only if a specific issue affected this stage.";
+  }
+  if (stage.id === "operation-started") {
+    return "An operation can take as long as clinically required, so there is no automatic time limit. Record a delay only if a specific issue affected this stage.";
+  }
+  return `There is no automatic time limit during ${stage.name}. Record a delay only if a specific issue affected this stage.`;
 }

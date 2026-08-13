@@ -36,7 +36,7 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
     name: "Anaesthetic Started",
     display_order: 4,
     colour: "#7c3aed",
-    delay_threshold_minutes: 35,
+    delay_threshold_minutes: 0,
     board_band: "Anaesthetic"
   },
   {
@@ -54,7 +54,7 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
     name: "Operation started",
     display_order: 6,
     colour: "#dc2626",
-    delay_threshold_minutes: 120,
+    delay_threshold_minutes: 0,
     board_band: "Operating"
   },
   {

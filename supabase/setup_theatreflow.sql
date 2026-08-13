@@ -45,9 +45,9 @@ values
   ('patient-on-list', 'cepod-emergency-theatres', 'Patient on list', 1, '#64748b', 0, 'Waiting'),
   ('sent-for', 'cepod-emergency-theatres', 'Patient Sent For', 2, '#0891b2', 20, 'Sent For'),
   ('patient-arrived', 'cepod-emergency-theatres', 'Patient Arrived in Anaesthetic Room', 3, '#2563eb', 15, 'Arrived'),
-  ('anaesthetic-started', 'cepod-emergency-theatres', 'Anaesthetic Started', 4, '#7c3aed', 35, 'Anaesthetic'),
+  ('anaesthetic-started', 'cepod-emergency-theatres', 'Anaesthetic Started', 4, '#7c3aed', 0, 'Anaesthetic'),
   ('patient-in-theatre', 'cepod-emergency-theatres', 'Patient in Theatre', 5, '#0e7490', 15, 'Operating'),
-  ('operation-started', 'cepod-emergency-theatres', 'Operation started', 6, '#dc2626', 120, 'Operating'),
+  ('operation-started', 'cepod-emergency-theatres', 'Operation started', 6, '#dc2626', 0, 'Operating'),
   ('operation-finished', 'cepod-emergency-theatres', 'Operation finished', 7, '#ea580c', 20, 'Operating'),
   ('patient-in-recovery', 'cepod-emergency-theatres', 'Patient in Recovery', 8, '#16a34a', 30, 'Recovery'),
   ('patient-out-of-recovery', 'cepod-emergency-theatres', 'Patient out of Recovery', 9, '#15803d', 25, 'Ward')
