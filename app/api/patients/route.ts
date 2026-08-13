@@ -17,7 +17,10 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const created_at = payload.decision_to_operate_time ? new Date(payload.decision_to_operate_time).toISOString() : now;
   const operation_date = payload.operation_date || toDateInputValue(new Date());
-  const booking_cohort: "booked" | "moved_to_planned" = operation_date > toDateInputValue(new Date(created_at)) ? "moved_to_planned" : "booked";
+  const initialListType = operation_date > toDateInputValue(new Date(now)) ? "to_planned" : "to_cepod";
+  // A future operation date is a direct planned booking, not evidence that the
+  // patient was moved from CEPOD. The list movement endpoint records real moves.
+  const booking_cohort: "booked" | "moved_to_planned" = "booked";
 
   if (!supabase) {
     return NextResponse.json({
@@ -84,6 +87,15 @@ export async function POST(request: Request) {
     delay_reason_ids: [],
     delay_comments: null,
     infrastructure_event_ids: []
+  });
+
+  await supabase.from("patient_list_movements").insert({
+    patient_id: data.id,
+    from_operation_date: null,
+    to_operation_date: operation_date,
+    moved_at: now,
+    movement_type: initialListType,
+    user_id: user?.id ?? null
   });
 
   return NextResponse.json({ ok: true, patient: data });

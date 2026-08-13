@@ -98,8 +98,8 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 min-[900px]:grid-cols-5">
                   {suite.theatres.map((theatre) => {
                     const theatrePatients = livePatients.filter((patient) => patient.theatre_id === theatre.id);
-                    const delayed = theatrePatients.filter((patient) => patient.delay_status !== "green").length;
-                    const operating = theatrePatients.filter((patient) => ["Anaesthetic", "Operating"].includes(patient.stage.board_band)).length;
+                    const delayed = theatrePatients.filter((patient) => patient.stage.board_band !== "Ward" && patient.delay_status !== "green").length;
+                    const operating = theatrePatients.filter((patient) => patient.stage.board_band === "Operating").length;
                     const recovery = theatrePatients.filter((patient) => patient.stage.board_band === "Recovery").length;
                     const selected = selectedTheatreId === theatre.id;
                     return (
@@ -155,7 +155,9 @@ function BoardStat({ label, value }: { label: string; value: number }) {
 }
 
 function WorkflowBandList({ band, patients, theatres }: { band: WorkflowBand; patients: PatientWithStage[]; theatres: Theatre[] }) {
-  const heading = band === "Operating" ? "Theatre" : band;
+  const heading = band === "Operating" ? "Theatre" : band === "Ward" ? "Completed patients" : band;
+  const showsActiveStageTimer = band !== "Ward";
+  const showsAutomaticDelayStatus = band !== "Waiting" && band !== "Ward";
 
   return (
     <section data-workflow-band={band} className="clinical-card min-h-32 rounded-lg border bg-card p-3">
@@ -169,7 +171,7 @@ function WorkflowBandList({ band, patients, theatres }: { band: WorkflowBand; pa
           return (
             <div key={patient.id} className="flex min-w-0 items-start gap-2">
               {band === "Waiting" ? <span className="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary bg-cyan-50 text-sm font-bold text-primary dark:bg-cyan-950/40" aria-label={`Waiting list position ${index + 1}`}>{index + 1}</span> : null}
-              <Card className={cn("min-w-0 flex-1 space-y-1.5 p-2.5", band !== "Waiting" && delayClasses(patient.delay_status))}>
+              <Card className={cn("min-w-0 flex-1 space-y-1.5 p-2.5", showsAutomaticDelayStatus && delayClasses(patient.delay_status))}>
                 <div className="flex min-w-0 items-center gap-2">
                   <p className="shrink-0 font-bold" title={patient.hospital_number}>{patient.hospital_number}</p>
                   <span className="text-muted-foreground" aria-hidden="true">·</span>
@@ -180,7 +182,7 @@ function WorkflowBandList({ band, patients, theatres }: { band: WorkflowBand; pa
                   <span className="flex shrink-0 items-center justify-end gap-1">
                     <Badge tone="blue" className="px-2 py-0.5" aria-label={theatre ? theatre.name : "Theatre unassigned"}>{theatre ? `T${theatre.display_order}` : "T—"}</Badge>
                     <Badge tone={priorityTone(patient.cepod_priority)} className="px-2 py-0.5" aria-label={`Priority ${priorityLabel(patient.cepod_priority)}`}>{priorityLabel(patient.cepod_priority)}</Badge>
-                    <Badge className="gap-1 px-2 py-0.5" aria-label={band === "Waiting" ? `${patient.elapsed_minutes} minutes waiting; no automatic time limit` : `${patient.elapsed_minutes} minutes in current stage`}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{patient.elapsed_minutes}m</Badge>
+                    {showsActiveStageTimer ? <Badge className="gap-1 px-2 py-0.5" aria-label={band === "Waiting" ? `${patient.elapsed_minutes} minutes waiting; no automatic time limit` : `${patient.elapsed_minutes} minutes in current stage`}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{patient.elapsed_minutes}m</Badge> : null}
                   </span>
                 </div>
               </Card>

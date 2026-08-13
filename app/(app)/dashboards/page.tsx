@@ -1,6 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { DashboardCharts } from "@/components/dashboards/dashboard-charts";
-import { getDelayReasons, getTodaysPatients, getWorkflowEvents } from "@/lib/repositories/workflow-repository";
+import { getTheatreConfiguration } from "@/lib/repositories/theatre-repository";
+import { getDelayReasons, getPatientListMovements, getTodaysPatients, getWorkflowEvents } from "@/lib/repositories/workflow-repository";
 import { requirePagePermission } from "@/lib/services/access-control";
 
 export const dynamic = "force-dynamic";
@@ -8,10 +9,12 @@ export const revalidate = 0;
 
 export default async function DashboardsPage() {
   await requirePagePermission("viewDashboards");
-  const [patients, events, delayReasons] = await Promise.all([
+  const [patients, events, delayReasons, theatreConfiguration, patientListMovements] = await Promise.all([
     getTodaysPatients(),
     getWorkflowEvents(),
-    getDelayReasons()
+    getDelayReasons(),
+    getTheatreConfiguration(),
+    getPatientListMovements()
   ]);
 
   return (
@@ -23,7 +26,14 @@ export default async function DashboardsPage() {
         </div>
         <p className="mt-1 text-sm text-muted-foreground">Operational performance, delay patterns, infrastructure impact and specialty views.</p>
       </section>
-      <DashboardCharts patients={patients} events={events} delayReasons={delayReasons} />
+      <DashboardCharts
+        patients={patients}
+        events={events}
+        delayReasons={delayReasons}
+        theatreConfiguration={theatreConfiguration}
+        patientListMovements={patientListMovements}
+        initialNow={new Date().toISOString()}
+      />
     </div>
   );
 }

@@ -145,7 +145,7 @@ export async function getPatients(): Promise<Patient[]> {
     ...patient,
     procedure: patient.procedure ?? patient.procedure_name ?? "Not recorded",
     operation_date: patient.operation_date ?? patient.created_at.slice(0, 10),
-    booking_cohort: patient.booking_cohort ?? ((patient.operation_date ?? patient.created_at.slice(0, 10)) > patient.created_at.slice(0, 10) ? "moved_to_planned" : "booked"),
+    booking_cohort: patient.booking_cohort ?? "booked",
     unresolved: patient.unresolved ?? false,
     unresolved_at: patient.unresolved_at ?? null,
     unresolved_from_stage: patient.unresolved_from_stage ?? null,
@@ -191,7 +191,7 @@ export async function getPatientListMovements(): Promise<PatientListMovement[]> 
 }
 
 function normaliseCepodStages(stages: WorkflowStage[]) {
-  const untimedStageIds = new Set(["patient-on-list", "anaesthetic-started", "operation-started"]);
+  const untimedStageIds = new Set(["patient-on-list", "anaesthetic-started", "operation-started", "patient-out-of-recovery"]);
   const withoutDecisionStage = stages
     .filter((stage) => stage.id !== "decision-to-operate")
     .map((stage) => untimedStageIds.has(stage.id) ? { ...stage, delay_threshold_minutes: 0 } : stage);

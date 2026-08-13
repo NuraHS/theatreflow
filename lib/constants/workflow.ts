@@ -81,7 +81,7 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
     name: "Patient out of Recovery",
     display_order: 9,
     colour: "#15803d",
-    delay_threshold_minutes: 25,
+    delay_threshold_minutes: 0,
     board_band: "Ward"
   }
 ];

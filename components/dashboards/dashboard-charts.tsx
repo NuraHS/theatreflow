@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { SUPPORTED_SPECIALTIES } from "@/lib/constants/clinical-teams";
-import type { DelayReason, PatientWithStage, WorkflowEvent } from "@/lib/types/domain";
+import type { DelayReason, PatientListMovement, PatientWithStage, TheatreConfiguration, WorkflowEvent } from "@/lib/types/domain";
 
 const colours = ["#0891b2", "#7c3aed", "#ca8a04", "#0f766e", "#dc2626", "#4f46e5", "#be185d", "#65a30d"];
 const chartTooltipStyle: React.CSSProperties = { backgroundColor: "#ffffff", borderColor: "#d1d5db", color: "#111827" };
@@ -32,9 +32,16 @@ const delayStages = [
   ["patient-in-recovery", "Patient in Recovery"], ["patient-out-of-recovery", "Patient out of Recovery"]
 ] as const;
 
-type Props = { patients: PatientWithStage[]; events: WorkflowEvent[]; delayReasons: DelayReason[] };
+type Props = {
+  patients: PatientWithStage[];
+  events: WorkflowEvent[];
+  delayReasons: DelayReason[];
+  theatreConfiguration: TheatreConfiguration;
+  patientListMovements: PatientListMovement[];
+  initialNow: string;
+};
 
-export function DashboardCharts({ patients, events, delayReasons }: Props) {
+export function DashboardCharts({ patients, events, delayReasons, theatreConfiguration, patientListMovements, initialNow }: Props) {
   const router = useRouter();
   const refreshDashboard = React.useCallback(() => router.refresh(), [router]);
   useRealtimeWorkflow(refreshDashboard);
@@ -42,53 +49,76 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
   const [startDate, setStartDate] = React.useState(today);
   const [endDate, setEndDate] = React.useState(today);
   const [specialty, setSpecialty] = React.useState("all");
+  const [location, setLocation] = React.useState("all");
   const [delayStage, setDelayStage] = React.useState("all");
   const [delayReason, setDelayReason] = React.useState("all");
-  const [now, setNow] = React.useState(() => new Date());
+  const [now, setNow] = React.useState(() => new Date(initialNow));
 
   React.useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 3_600_000); return () => window.clearInterval(timer); }, []);
   React.useEffect(() => { const timer = window.setInterval(refreshDashboard, 15_000); return () => window.clearInterval(timer); }, [refreshDashboard]);
 
   const range = normaliseRange(startDate, endDate);
-  const specialtyPatients = patients.filter((patient) => specialty === "all" || patient.specialty === specialty);
-  const patientIds = new Set(specialtyPatients.map((patient) => patient.id));
-  const scheduledPatients = specialtyPatients.filter((patient) => !patient.cancelled && inDateRange(patient.operation_date ?? patient.created_at, range));
-  const unresolvedPatients = scheduledPatients.filter((patient) => patient.unresolved);
-  const liveScheduledPatients = scheduledPatients.filter((patient) => !patient.unresolved);
+  const locationPatients = patients.filter((patient) => patientMatchesLocation(patient, location, theatreConfiguration));
+  const specialtyPatients = locationPatients.filter((patient) => specialty === "all" || patient.specialty === specialty);
+  const dashboardPatients = specialtyPatients.filter((patient) => patientWasActiveDuringRange(patient, range));
+  const patientIds = new Set(dashboardPatients.map((patient) => patient.id));
   const rangeEvents = events.filter((event) => patientIds.has(event.patient_id) && inDateRange(event.timestamp, range));
-  const bookedPatients = scheduledPatients.filter((patient) => patient.booking_cohort !== "moved_to_planned");
-  const movedPatients = scheduledPatients.filter((patient) => patient.booking_cohort === "moved_to_planned");
-  const completedPatients = scheduledPatients.filter((patient) => patient.current_stage === "patient-out-of-recovery");
-  const cancelledPatients = specialtyPatients.filter((patient) => patient.cancelled && inDateRange(patient.cancelled_at ?? patient.operation_date ?? patient.created_at, range));
-  const dashboardPatients = uniquePatients([...scheduledPatients, ...cancelledPatients]);
-  const waitingPatients = liveScheduledPatients.filter((patient) => ["Waiting", "Sent For", "Arrived"].includes(patient.stage.board_band));
+  const currentListPatients = dashboardPatients.filter((patient) => patientIsActiveAtEnd(patient, range));
+  const currentListStates = new Map(currentListPatients.map((patient) => [patient.id, getListStateAt(patient, patientListMovements, range.end)]));
+  const currentStages = new Map(currentListPatients.map((patient) => [patient.id, getStageAt(patient, events, range.end)]));
+  const plannedPatients = currentListPatients.filter((patient) => currentListStates.get(patient.id) === "planned");
+  const cepodPatients = currentListPatients.filter((patient) => currentListStates.get(patient.id) === "cepod");
+  const unresolvedPatients = cepodPatients.filter((patient) => patient.unresolved);
+  const liveCepodPatients = cepodPatients.filter((patient) => !patient.unresolved);
+  const completedPatients = dashboardPatients.filter((patient) => patient.completed_at ? inDateRange(patient.completed_at, range) : rangeEvents.some((event) => event.patient_id === patient.id && event.workflow_stage_id === "patient-out-of-recovery"));
+  const cancelledPatients = dashboardPatients.filter((patient) => patient.cancelled_at ? inDateRange(patient.cancelled_at, range) : patient.cancelled && inDateRange(patient.operation_date ?? patient.created_at, range));
+  const waitingPatients = liveCepodPatients.filter((patient) => currentStages.get(patient.id) === "patient-on-list");
+  const anaestheticPatients = liveCepodPatients.filter((patient) => ["patient-arrived", "anaesthetic-started"].includes(currentStages.get(patient.id) ?? ""));
+  const theatrePatients = liveCepodPatients.filter((patient) => ["patient-in-theatre", "operation-started", "operation-finished"].includes(currentStages.get(patient.id) ?? ""));
+  const recoveryPatients = liveCepodPatients.filter((patient) => currentStages.get(patient.id) === "patient-in-recovery");
   const delayedPatientIds = new Set(rangeEvents.filter((event) => event.delay_reason_ids.length).map((event) => event.patient_id));
   const delayedPatients = dashboardPatients.filter((patient) => delayedPatientIds.has(patient.id));
-  const awaitingSurgeryPatients = liveScheduledPatients.filter((patient) => ["patient-on-list", "sent-for", "patient-arrived", "anaesthetic-started", "patient-in-theatre", "operation-started"].includes(patient.current_stage));
-  const completedSurgeryPatients = liveScheduledPatients.filter((patient) => ["operation-finished", "patient-in-recovery"].includes(patient.current_stage));
+  const awaitingSurgeryPatients = liveCepodPatients.filter((patient) => ["patient-on-list", "sent-for", "patient-arrived", "anaesthetic-started", "patient-in-theatre", "operation-started"].includes(currentStages.get(patient.id) ?? ""));
+  const completedSurgeryPatients = liveCepodPatients.filter((patient) => ["operation-finished", "patient-in-recovery"].includes(currentStages.get(patient.id) ?? ""));
   const outcomes = buildPriorityOutcomes([
-    ["Total booked", scheduledPatients],
+    ["Total booked", dashboardPatients],
     ["Awaiting surgery", awaitingSurgeryPatients],
     ["Completed surgery", completedSurgeryPatients],
-    ["Moved to planned", movedPatients],
+    ["Planned patients", plannedPatients],
     ["Cancelled", cancelledPatients],
     ["Unresolved", unresolvedPatients],
     ["Delayed", delayedPatients],
     ["Completed", completedPatients]
   ]);
   const specialties = [...new Set([...SUPPORTED_SPECIALTIES, ...patients.map((patient) => patient.specialty)])];
-  const caseSeries = buildCaseSeries(scheduledPatients, range);
+  const locationLabel = getLocationLabel(location, theatreConfiguration);
+  const rangeLabel = formatRange(range);
+  const caseSeriesMode = range.startKey === range.endKey && location === "all"
+    ? "theatre"
+    : range.startKey === range.endKey && location.startsWith("theatre:")
+      ? "specialty"
+      : "date";
+  const caseSeries = caseSeriesMode === "theatre"
+    ? buildTheatreCaseSeries(dashboardPatients, theatreConfiguration)
+    : caseSeriesMode === "specialty"
+      ? buildSpecialtyCaseSeries(dashboardPatients, specialties)
+      : buildCaseSeries(dashboardPatients, range);
+  const caseChartTitle = caseSeriesMode === "theatre" ? "Cases by theatre" : caseSeriesMode === "specialty" ? "Cases by specialty" : "Cases by date";
+  const caseChartSubtitle = caseSeriesMode === "theatre"
+    ? `Listed cases by theatre · ${rangeLabel}`
+    : caseSeriesMode === "specialty"
+      ? `${locationLabel} · ${rangeLabel}`
+      : `Listed cases · ${rangeLabel}`;
   const delayReasonEvents = delayStage === "all" ? rangeEvents.filter((event) => event.delay_reason_ids.length) : rangeEvents.filter((event) => event.workflow_stage_id === delayStage && event.delay_reason_ids.length);
   const delayReasonPatientsAffected = new Set(delayReasonEvents.map((event) => event.patient_id)).size;
   const delays = buildDelayData(rangeEvents, delayReasons, delayStage);
   const delayTrend = buildDelayTrend(rangeEvents, delayReason, range, delayReasons, specialtyPatients);
-  const timings = buildTimings(specialtyPatients, rangeEvents);
+  const timings = buildTimings(dashboardPatients, rangeEvents);
   const firstCaseStart = buildFirstCaseStart(rangeEvents);
   const completionRate = percentage(completedPatients.length, dashboardPatients.length);
   const cancellationRate = percentage(cancelledPatients.length, dashboardPatients.length);
   const delayedRate = percentage(delayedPatients.length, dashboardPatients.length);
   const cancellationReasons = buildCancellationReasons(cancelledPatients);
-  const rangeLabel = formatRange(range);
 
   function setPreset(preset: "today" | "week" | "last-week" | "month") {
     const date = new Date();
@@ -102,16 +132,17 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
 
   return <div className="space-y-4">
     <section className="clinical-card rounded-lg border bg-card p-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" aria-hidden="true" /><h2 className="text-lg font-bold">Executive summary</h2><Badge tone="green">Live</Badge></div><p className="mt-1 text-sm text-muted-foreground">Every card reflects the selected dates and specialty. Updated {now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.</p></div>
-        <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[170px_170px_240px_140px]">
-          <DateField label="Start date" value={startDate} max={endDate} onChange={setStartDate} />
-          <DateField label="End date" value={endDate} min={startDate} onChange={setEndDate} />
-          <label className="block text-sm font-semibold">Specialty<Select className="mt-1" value={specialty} onChange={(event) => setSpecialty(event.target.value)}><option value="all">All specialties</option>{specialties.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
-          <Button type="button" variant="outline" className="h-11 w-full" onClick={() => { setDates(today, today); setSpecialty("all"); }}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>
-        </div>
+      <div>
+        <div className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" aria-hidden="true" /><h2 className="text-lg font-bold">Executive summary</h2><Badge tone="green">Live</Badge></div>
+        <p className="mt-1 text-sm text-muted-foreground">Every card reflects the selected dates, specialty and theatre location. Updated {now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.</p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2"><PresetButton onClick={() => setPreset("today")}>Today</PresetButton><PresetButton onClick={() => setPreset("week")}>This week</PresetButton><PresetButton onClick={() => setPreset("last-week")}>Last week</PresetButton><PresetButton onClick={() => setPreset("month")}>This month</PresetButton></div>
+      <div className="mt-4 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[170px_170px_minmax(220px,1fr)_minmax(220px,1fr)]">
+        <DateField label="Start date" value={startDate} max={endDate} onChange={setStartDate} />
+        <DateField label="End date" value={endDate} min={startDate} onChange={setEndDate} />
+        <label className="block text-sm font-semibold">Specialty<Select className="mt-1" value={specialty} onChange={(event) => setSpecialty(event.target.value)}><option value="all">All specialties</option>{specialties.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
+        <label className="block text-sm font-semibold">Suite / theatre<Select className="mt-1" value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">All accessible suites</option>{theatreConfiguration.suites.map((suite) => <optgroup key={suite.id} label={suite.name}><option value={`suite:${suite.id}`}>All {suite.name} theatres</option>{theatreConfiguration.theatres.filter((theatre) => theatre.suite_id === suite.id).map((theatre) => <option key={theatre.id} value={`theatre:${theatre.id}`}>{suite.name} — {theatre.name}</option>)}</optgroup>)}</Select></label>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2"><PresetButton onClick={() => setPreset("today")}>Today</PresetButton><PresetButton onClick={() => setPreset("week")}>This week</PresetButton><PresetButton onClick={() => setPreset("last-week")}>Last week</PresetButton><PresetButton onClick={() => setPreset("month")}>This month</PresetButton><Button type="button" variant="outline" className="min-h-10 px-3" onClick={() => { setDates(today, today); setSpecialty("all"); setLocation("all"); }}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button></div>
     </section>
 
     {unresolvedPatients.length ? (
@@ -129,10 +160,10 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
       </section>
     ) : null}
 
-    <Card className="border-primary/20 bg-gradient-to-br from-card to-secondary/30"><CardHeader><CardTitle>Case summary</CardTitle><p className="text-sm text-muted-foreground">{rangeLabel}{specialty === "all" ? " · All specialties" : ` · ${specialty}`}</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"><Summary label="Total cases" value={dashboardPatients.length} detail="The total number of cases booked on CEPOD, planned or cancelled in the selected period." featured /><Summary label="Currently waiting" value={waitingPatients.length} detail="The patients currently booked on the waiting list for CEPOD surgery or planned for surgery in the selected period." /><Summary label="Unresolved" value={unresolvedPatients.length} detail={'Patients who have been entered on the CEPOD list but their pathway has not been updated in 24 hours after being sent for. Please go to "Unresolved Patients" on the patients page to resolve these.'} /><Summary label="Booked on CEPOD" value={bookedPatients.length} detail="Patients booked on the CEPOD list in the selected period." /><Summary label="Moved to planned" value={movedPatients.length} detail="Patients booked on CEPOD for an emergency case on a planned or future date (e.g. awaiting personnel or equipment). These patients are counted as planned but moved to the CEPOD list on their date of surgery unless cancelled." /><Summary label="Completed" value={completedPatients.length} detail="Patients on the CEPOD list who have completed surgery and left recovery." /><Summary label="Cancelled" value={cancelledPatients.length} detail="Patients initially booked on CEPOD and subsequently cancelled." /><Summary label="Delayed cases" value={delayedPatients.length} detail="Patients booked for surgery who experienced at least one delay to their pathway." /><Summary label="Cases experiencing delay" value={`${delayedRate}%`} detail="Delayed cases as a percentage of the total cases in the selected period." /><Summary label="Completion rate" value={`${completionRate}%`} detail="Completed cases as a percentage of the total cases in the selected period." /><Summary label="Cancellation rate" value={`${cancellationRate}%`} detail="Cancelled cases as a percentage of the total cases in the selected period." /></CardContent></Card>
+    <Card className="border-primary/20 bg-gradient-to-br from-card to-secondary/30"><CardHeader><CardTitle>Case summary</CardTitle><p className="text-sm text-muted-foreground">{rangeLabel}{specialty === "all" ? " · All specialties" : ` · ${specialty}`} · {locationLabel}</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"><Summary label="Total cases" value={dashboardPatients.length} detail="All patients who were on either the CEPOD list or planned list during the selected period, including patients completed or cancelled during that period." featured /><Summary label="Currently waiting" value={waitingPatients.length} detail="Patients on the CEPOD list at the end of the selected period who are still waiting to be sent for. Planned, completed and cancelled patients are not included." /><Summary label="In anaesthetic" value={anaestheticPatients.length} detail="Patients on the CEPOD list who have arrived in the anaesthetic room or whose anaesthetic has started." /><Summary label="In theatre" value={theatrePatients.length} detail="Patients on the CEPOD list who are in theatre, whose operation has started, or whose operation has finished but who have not yet entered recovery." /><Summary label="In recovery" value={recoveryPatients.length} detail="Patients on the CEPOD list who are currently in recovery and have not yet left recovery." /><Summary label="Completed cases" value={completedPatients.length} detail="Patients who completed surgery and left recovery during the selected period." /><Summary label="Cancelled" value={cancelledPatients.length} detail="Patients whose case was cancelled during the selected period." /><Summary label="Delayed cases" value={delayedPatients.length} detail="Patients who experienced at least one recorded delay during the selected period." /><Summary label="Patients on planned list" value={plannedPatients.length} detail="Patients whose most recent list entry at the end of the selected period places them on the planned list. They remain counted each day until they move to CEPOD, complete or are cancelled." /><Summary label="Cases experiencing delay" value={`${delayedRate}%`} detail="Delayed cases as a percentage of the total cases in the selected period." /><Summary label="Completion rate" value={`${completionRate}%`} detail="Completed cases as a percentage of the total cases in the selected period." /><Summary label="Cancellation rate" value={`${cancellationRate}%`} detail="Cancelled cases as a percentage of the total cases in the selected period." /><Summary label="Unresolved" value={unresolvedPatients.length} detail={'Patients whose pathway has not been updated within the reconciliation period. Please go to "Unresolved Patients" on the patients page to confirm their current stage.'} /></CardContent></Card>
 
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-      <ChartCard title="Cases by date" subtitle={`Booked cases · ${rangeLabel}`}><div className="h-[340px] min-w-0 w-full"><BarChart responsive style={responsiveChartStyle} data={caseSeries} margin={{ top: 8, right: 8, left: -12, bottom: 18 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} /><Legend content={<SpecialtyLegend />} />{specialties.map((item, index) => <Bar key={item} dataKey={item} stackId="cases" fill={specialtyColour(item, index)} isAnimationActive={false} />)}</BarChart></div></ChartCard>
+      <ChartCard title={caseChartTitle} subtitle={caseChartSubtitle}><div className="h-[340px] min-w-0 w-full"><BarChart responsive style={responsiveChartStyle} data={caseSeries} margin={{ top: 8, right: 8, left: -12, bottom: caseSeriesMode === "specialty" ? 54 : 18 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" interval={0} height={caseSeriesMode === "specialty" ? 62 : 30} tick={caseSeriesMode === "specialty" ? <SpecialtyAxisTick /> : undefined} /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} />{caseSeriesMode === "specialty" ? <Bar dataKey="Cases" fill="#0891b2" radius={[4, 4, 0, 0]} isAnimationActive={false} /> : <><Legend content={<SpecialtyLegend />} />{specialties.map((item, index) => <Bar key={item} dataKey={item} stackId="cases" fill={specialtyColour(item, index)} isAnimationActive={false} />)}</>}</BarChart></div></ChartCard>
       <ChartCard title="Case outcomes" subtitle={`Priority mix · ${rangeLabel}`}><div className="h-[350px] min-w-0 w-full"><BarChart responsive style={responsiveChartStyle} data={outcomes} margin={{ top: 8, right: 8, left: -12, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" tick={<OutcomeTick />} interval={0} height={54} /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} /><Legend /><Bar dataKey="P1" stackId="priority" fill="#dc2626" isAnimationActive={false} /><Bar dataKey="P2" stackId="priority" fill="#f59e0b" isAnimationActive={false} /><Bar dataKey="P3" stackId="priority" fill="#16a34a" isAnimationActive={false} /><Bar dataKey="P4" stackId="priority" fill="#2563eb" radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart></div></ChartCard>
     </div>
 
@@ -140,7 +171,7 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
 
     <div className="grid min-w-0 gap-4 xl:grid-cols-2">
       <ChartCard title="Delay reasons" subtitle={`${rangeLabel} · ${delayReasonPatientsAffected} patient${delayReasonPatientsAffected === 1 ? "" : "s"} affected during selected period`} action={<Select className="w-full sm:w-56" value={delayStage} onChange={(event) => setDelayStage(event.target.value)} aria-label="Workflow stage affected"><option value="all">All workflow stages</option>{delayStages.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>}>{delays.length ? <ol className="space-y-2">{delays.map((item, index) => <li key={item.id} className="grid grid-cols-[32px_1fr_auto] items-center gap-3 rounded-lg border bg-muted/20 px-3 py-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm font-bold">{index + 1}</span><span className="font-semibold">{item.name}</span><Badge tone="amber">{item.value}</Badge></li>)}</ol> : <EmptyState text="No delays recorded for these filters" />}</ChartCard>
-      <ChartCard title="Delay trends (number of patients affected)" subtitle={`Trend within ${rangeLabel}`} action={<Select className="w-full sm:w-56" value={delayReason} onChange={(event) => setDelayReason(event.target.value)} aria-label="Delay reason"><option value="all">All delay reasons</option>{delayReasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}</Select>}>{delayTrend.length ? <div className="h-[300px] min-w-0 w-full"><LineChart responsive style={responsiveChartStyle} data={delayTrend}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" /><YAxis allowDecimals={false} /><Tooltip content={<DelayTrendTooltip />} /><Line type="monotone" dataKey="patientsDelayed" name="Patients delayed" stroke="#dc2626" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={false} /></LineChart></div> : <EmptyState text="No trend data for these filters" />}</ChartCard>
+      <ChartCard title="Delay trends (number of patients affected)" subtitle={`Trend within ${rangeLabel}`} action={<Select className="w-full sm:w-56" value={delayReason} onChange={(event) => setDelayReason(event.target.value)} aria-label="Delay reason"><option value="all">All delay reasons</option>{delayReasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}</Select>}>{delayTrend.length ? <div className="h-[300px] min-w-0 w-full"><LineChart responsive style={responsiveChartStyle} data={delayTrend}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" /><YAxis allowDecimals={false} /><Tooltip content={<DelayTrendTooltip />} wrapperStyle={{ pointerEvents: "auto", zIndex: 30 }} /><Line type="monotone" dataKey="patientsDelayed" name="Patients delayed" stroke="#dc2626" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={false} /></LineChart></div> : <EmptyState text="No trend data for these filters" />}</ChartCard>
     </div>
     <ChartCard title="Cancellation reasons" subtitle={`Cancelled cases ranked by frequency · ${rangeLabel}`}>{cancellationReasons.length ? <ol className="grid gap-2 md:grid-cols-2">{cancellationReasons.map((item, index) => <li key={item.reason} className="grid grid-cols-[32px_1fr_auto] items-center gap-3 rounded-lg border bg-muted/20 px-3 py-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm font-bold">{index + 1}</span><span className="font-semibold">{item.reason}</span><Badge tone="red">{item.count}</Badge></li>)}</ol> : <EmptyState text="No cancellations recorded for these filters" />}</ChartCard>
   </div>;
@@ -148,6 +179,24 @@ export function DashboardCharts({ patients, events, delayReasons }: Props) {
 
 function DateField({ label, value, min, max, onChange }: { label: string; value: string; min?: string; max?: string; onChange: (value: string) => void }) { return <label className="block text-sm font-semibold">{label}<div className="relative mt-1"><CalendarDays className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" /><Input type="date" className="pl-9" value={value} min={min} max={max} onChange={(event) => onChange(event.target.value)} /></div></label>; }
 function PresetButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className="min-h-10 cursor-pointer rounded-md border bg-background px-3 text-sm font-semibold hover:bg-muted">{children}</button>; }
+function patientMatchesLocation(patient: PatientWithStage, location: string, configuration: TheatreConfiguration) {
+  if (location === "all") return true;
+  const [scope, id] = location.split(":", 2);
+  if (scope === "theatre") return patient.theatre_id === id;
+  if (scope === "suite") {
+    const theatreIds = new Set(configuration.theatres.filter((theatre) => theatre.suite_id === id).map((theatre) => theatre.id));
+    return Boolean(patient.theatre_id && theatreIds.has(patient.theatre_id));
+  }
+  return true;
+}
+function getLocationLabel(location: string, configuration: TheatreConfiguration) {
+  if (location === "all") return "All accessible suites";
+  const [scope, id] = location.split(":", 2);
+  if (scope === "suite") return configuration.suites.find((suite) => suite.id === id)?.name ?? "Selected suite";
+  const theatre = configuration.theatres.find((item) => item.id === id);
+  const suite = theatre ? configuration.suites.find((item) => item.id === theatre.suite_id) : null;
+  return theatre ? `${suite?.name ?? "Suite"} · ${theatre.name}` : "Selected theatre";
+}
 function Summary({ label, value, detail, featured = false }: { label: string; value: string | number; detail: string; featured?: boolean }) { return <div className={`clinical-card relative min-h-32 rounded-lg border bg-card p-4 pr-14 ${featured ? "border-primary/40 ring-2 ring-primary/10" : ""}`}><InfoTooltip text={detail} /><p className="text-sm font-semibold text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-bold">{value}</p></div>; }
 function ChartCard({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) { return <Card className="min-w-0 overflow-hidden"><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><CardTitle>{title}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{subtitle}</p></div>{action}</div></CardHeader><CardContent className="min-w-0">{children}</CardContent></Card>; }
 function InfoTooltip({ text }: { text: string }) { return <div className="group absolute right-3 top-3"><button type="button" aria-label={text} className="flex h-11 w-11 cursor-help items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/30"><Info className="h-4 w-4" /></button><div role="tooltip" className="pointer-events-none absolute right-0 top-10 z-20 hidden w-64 rounded-md bg-foreground p-3 text-xs font-medium leading-relaxed text-background shadow-xl group-hover:block group-focus-within:block">{text}</div></div>; }
@@ -160,7 +209,7 @@ function OutcomeTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payloa
     "Total booked": ["Total", "booked"],
     "Awaiting surgery": ["Awaiting", "surgery"],
     "Completed surgery": ["Completed", "surgery"],
-    "Moved to planned": ["Moved to", "planned"],
+    "Planned patients": ["Planned", "patients"],
     Cancelled: ["Cancelled"],
     Unresolved: ["Unresolved"],
     Delayed: ["Delayed"],
@@ -169,10 +218,72 @@ function OutcomeTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payloa
   const lines = labels[payload?.value ?? ""] ?? [payload?.value ?? ""];
   return <g transform={`translate(${x},${y})`}><text textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="11">{lines.map((line, index) => <tspan key={line} x="0" dy={index === 0 ? 16 : 14}>{line}</tspan>)}</text></g>;
 }
+function SpecialtyAxisTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payload?: { value?: string } }) {
+  const value = payload?.value ?? "";
+  const labels: Record<string, string[]> = {
+    "General Surgery": ["General", "Surgery"],
+    "Trauma and orthopaedics": ["Trauma &", "orthopaedics"],
+    "Obstetrics and gynaecology": ["Obstetrics &", "gynaecology"]
+  };
+  const lines = labels[value] ?? [value];
+  return <g transform={`translate(${x},${y})`}><text textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="11">{lines.map((line, index) => <tspan key={line} x="0" dy={index === 0 ? 16 : 14}>{line}</tspan>)}</text></g>;
+}
 type Range = { start: Date; end: Date; startKey: string; endKey: string };
 function normaliseRange(start: string, end: string): Range { const startKey = start <= end ? start : end; const endKey = start <= end ? end : start; return { start: new Date(`${startKey}T00:00:00`), end: new Date(`${endKey}T23:59:59.999`), startKey, endKey }; }
 function inDateRange(value: string, range: Range) { const date = new Date(value.length === 10 ? `${value}T12:00:00` : value); return date >= range.start && date <= range.end; }
+function patientWasActiveDuringRange(patient: PatientWithStage, range: Range) {
+  if (Date.parse(patient.created_at) > range.end.getTime()) return false;
+  const closedAt = earliestDate(patient.cancelled_at, patient.completed_at);
+  return !closedAt || closedAt.getTime() >= range.start.getTime();
+}
+function patientIsActiveAtEnd(patient: PatientWithStage, range: Range) {
+  if (Date.parse(patient.created_at) > range.end.getTime()) return false;
+  const closedAt = earliestDate(patient.cancelled_at, patient.completed_at);
+  return !closedAt || closedAt.getTime() > range.end.getTime();
+}
+function earliestDate(...values: Array<string | null | undefined>) {
+  const dates = values.filter((value): value is string => Boolean(value)).map((value) => new Date(value)).filter((date) => !Number.isNaN(date.getTime())).sort((a, b) => a.getTime() - b.getTime());
+  return dates[0] ?? null;
+}
+function getListStateAt(patient: PatientWithStage, movements: PatientListMovement[], at: Date): "cepod" | "planned" {
+  const latest = movements
+    .filter((movement) => movement.patient_id === patient.id && movement.movement_type !== "rescheduled" && Date.parse(movement.moved_at) <= at.getTime())
+    .sort((a, b) => Date.parse(b.moved_at) - Date.parse(a.moved_at))[0];
+  if (latest) return latest.movement_type === "to_planned" ? "planned" : "cepod";
+  return dateKey(patient.operation_date ?? patient.created_at) > dateKey(patient.created_at) ? "planned" : "cepod";
+}
+function getStageAt(patient: PatientWithStage, events: WorkflowEvent[], at: Date) {
+  return events
+    .filter((event) => event.patient_id === patient.id && Date.parse(event.timestamp) <= at.getTime())
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0]?.workflow_stage_id ?? "patient-on-list";
+}
 function buildCaseSeries(patients: PatientWithStage[], range: Range) { const days = Math.floor((range.end.getTime() - range.start.getTime()) / 86_400_000) + 1; const weekly = days > 31; const buckets = new Map<string, Record<string, string | number>>(); const cursor = weekly ? startOfWeek(range.start) : new Date(range.start); const final = weekly ? startOfWeek(range.end) : new Date(range.end); while (cursor <= final) { const key = localDateKey(cursor); buckets.set(key, { label: weekly ? `w/c ${cursor.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : cursor.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) }); cursor.setDate(cursor.getDate() + (weekly ? 7 : 1)); } patients.forEach((patient) => { const date = new Date(`${dateKey(patient.operation_date ?? patient.created_at)}T12:00:00`); const anchor = weekly ? startOfWeek(date) : date; const key = localDateKey(anchor); const bucket = buckets.get(key); if (!bucket) return; bucket[patient.specialty] = Number(bucket[patient.specialty] ?? 0) + 1; }); return [...buckets.values()]; }
+function buildTheatreCaseSeries(patients: PatientWithStage[], configuration: TheatreConfiguration) {
+  const suites = new Map(configuration.suites.map((suite) => [suite.id, suite]));
+  const suiteOrder = new Map(configuration.suites.map((suite) => [suite.id, suite.display_order]));
+  const theatres = [...configuration.theatres].sort((a, b) =>
+    (suiteOrder.get(a.suite_id) ?? 0) - (suiteOrder.get(b.suite_id) ?? 0) || a.display_order - b.display_order
+  );
+  return theatres.map((theatre) => {
+    const suite = suites.get(theatre.suite_id);
+    const row: Record<string, string | number> = {
+      label: `${suiteInitials(suite?.name ?? "Suite")}${theatreNumber(theatre.name, theatre.display_order)}`
+    };
+    patients.filter((patient) => patient.theatre_id === theatre.id).forEach((patient) => {
+      row[patient.specialty] = Number(row[patient.specialty] ?? 0) + 1;
+    });
+    return row;
+  });
+}
+function buildSpecialtyCaseSeries(patients: PatientWithStage[], specialties: string[]) {
+  return specialties.map((item) => ({ label: item, Cases: patients.filter((patient) => patient.specialty === item).length }));
+}
+function suiteInitials(name: string) {
+  return (name.match(/\b[A-Za-z]/g) ?? [name[0] ?? "S"]).join("").toUpperCase();
+}
+function theatreNumber(name: string, fallback: number) {
+  return name.match(/\d+/)?.[0] ?? String(fallback);
+}
 function buildDelayData(events: WorkflowEvent[], reasons: DelayReason[], stage: string) { const relevant = stage === "all" ? events : events.filter((event) => event.workflow_stage_id === stage); return reasons.map((reason) => ({ id: reason.id, name: reason.label, value: relevant.filter((event) => event.delay_reason_ids.includes(reason.id)).length })).filter((item) => item.value).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)); }
 function buildDelayTrend(events: WorkflowEvent[], reason: string, range: Range, reasonDefinitions: DelayReason[], patients: PatientWithStage[]) {
   const days = Math.floor((range.end.getTime() - range.start.getTime()) / 86_400_000) + 1;
@@ -212,13 +323,12 @@ type DelayTooltipPatient = { label: string; priority: string; specialty: string;
 function DelayTrendTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { tooltipDate?: string; patientsDelayed?: number; patients?: DelayTooltipPatient[] } }> }) {
   if (!active || !payload?.length) return null;
   const item = payload[0]?.payload;
-  return <div className="max-w-sm rounded-md border bg-background p-3 text-sm text-foreground shadow-xl"><p className="font-bold">{item?.tooltipDate}</p><p className="mt-1 font-bold">Patients affected: {item?.patientsDelayed ?? 0}</p><div className="mt-3 space-y-3">{item?.patients?.map((patient) => <div key={patient.label}><p className="font-bold" style={{ color: specialtyColour(patient.specialty, 0) }}>{patient.label} - {patient.priority} ({patient.specialty})</p><ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground">{patient.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>)}</div></div>;
+  return <div className="max-h-64 w-[min(18rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain rounded-md border bg-background p-2.5 text-xs text-foreground shadow-xl"><div className="sticky -top-2.5 z-10 -mx-2.5 -mt-2.5 border-b bg-background px-2.5 py-2"><p className="font-bold">{item?.tooltipDate}</p><p className="mt-0.5 font-semibold">Patients affected: {item?.patientsDelayed ?? 0}</p></div><div className="mt-2 space-y-2">{item?.patients?.map((patient) => <div key={patient.label} className="rounded border bg-muted/20 p-2"><p className="font-bold leading-snug" style={{ color: specialtyColour(patient.specialty, 0) }}>{patient.label} · {patient.priority}</p><p className="mt-0.5 leading-snug text-muted-foreground">{patient.specialty}</p><ul className="mt-1 list-disc space-y-0.5 pl-4 leading-snug text-foreground">{patient.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>)}</div></div>;
 }
 function averagePair(events: WorkflowEvent[], startId: string, endId: string) { const grouped = new Map<string, WorkflowEvent[]>(); events.forEach((event) => grouped.set(event.patient_id, [...(grouped.get(event.patient_id) ?? []), event])); const values: number[] = []; grouped.forEach((items) => { const start = items.find((item) => item.workflow_stage_id === startId); const end = items.find((item) => item.workflow_stage_id === endId); if (start && end) values.push(Math.round((Date.parse(end.timestamp) - Date.parse(start.timestamp)) / 60_000)); }); return average(values.filter((value) => value >= 0)); }
 function average(values: number[]) { return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null; }
 function median(values: number[]) { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); const middle = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2); }
 function percentage(value: number, total: number) { return total ? Math.min(100, Math.round((value / total) * 100)) : 0; }
-function uniquePatients(patients: PatientWithStage[]) { return [...new Map(patients.map((patient) => [patient.id, patient])).values()]; }
 function formatMinutesAsClock(value: number) { const hours = Math.floor(value / 60) % 24; const minutes = value % 60; return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`; }
 function byTime(a: WorkflowEvent, b: WorkflowEvent) { return Date.parse(a.timestamp) - Date.parse(b.timestamp); }
 function dateKey(value: string) { return value.slice(0, 10); }
