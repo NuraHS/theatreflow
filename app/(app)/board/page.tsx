@@ -1,6 +1,6 @@
 import { MonitorUp } from "lucide-react";
 import { LiveBoard } from "@/components/workflow/live-board";
-import { getActivePatients } from "@/lib/repositories/workflow-repository";
+import { getLiveBoardPatients } from "@/lib/repositories/workflow-repository";
 import { getTheatreConfiguration } from "@/lib/repositories/theatre-repository";
 import { requirePagePermission } from "@/lib/services/access-control";
 
@@ -9,7 +9,7 @@ export const revalidate = 0;
 
 export default async function BoardPage() {
   await requirePagePermission("viewLiveBoard");
-  const [patients, locations] = await Promise.all([getActivePatients(), getTheatreConfiguration()]);
+  const [patients, locations] = await Promise.all([getLiveBoardPatients(), getTheatreConfiguration()]);
 
   return (
     <div className="space-y-5">

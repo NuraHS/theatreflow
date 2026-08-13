@@ -6,12 +6,13 @@ import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock, GripVert
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { AdvancePatientButton } from "@/components/workflow/advance-patient-button";
+import { PatientCreateForm } from "@/components/workflow/patient-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { DelayReason, PatientWithStage, WorkflowStage } from "@/lib/types/domain";
+import type { DelayReason, PatientWithStage, RecoveryArea, Theatre, TheatreSuite, WorkflowStage } from "@/lib/types/domain";
 import { getNextStage } from "@/lib/services/workflow-engine";
 import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { cn } from "@/lib/utils/cn";
@@ -21,23 +22,30 @@ import { formatUnresolvedThreshold } from "@/lib/utils/reconciliation";
 
 export function CepodWorkflow({
   patients,
+  suites,
+  theatres,
+  recoveryAreas,
   stages,
   delayReasons,
   todayIso,
   canManageWorkflow,
-  createPatient
+  canCreatePatients
 }: {
   patients: PatientWithStage[];
+  suites: TheatreSuite[];
+  theatres: Theatre[];
+  recoveryAreas: RecoveryArea[];
   stages: WorkflowStage[];
   delayReasons: DelayReason[];
   todayIso: string;
   canManageWorkflow: boolean;
-  createPatient?: React.ReactNode;
+  canCreatePatients: boolean;
 }) {
   const router = useRouter();
   const refreshPatients = React.useCallback(() => router.refresh(), [router]);
   useRealtimeWorkflow(refreshPatients);
   const [query, setQuery] = React.useState("");
+  const [selectedTheatreNumber, setSelectedTheatreNumber] = React.useState<"all" | number>("all");
   const [expandedId, setExpandedId] = React.useState("");
   const [orderedIds, setOrderedIds] = React.useState(() => patients.map((patient) => patient.id));
   const [draggedId, setDraggedId] = React.useState<string | null>(null);
@@ -93,7 +101,16 @@ export function CepodWorkflow({
     .filter((patient) => !isCepodDue(patient, displayDate))
     .sort((a, b) => getOperationDate(a).localeCompare(getOperationDate(b)) || Date.parse(a.created_at) - Date.parse(b.created_at));
 
-  const cepodFilteredPatients = cepodPatients.filter(matchesQuery);
+  const theatreNumberById = React.useMemo(
+    () => new Map(theatres.map((theatre) => [theatre.id, theatre.display_order])),
+    [theatres]
+  );
+  const cepodFilteredPatients = cepodPatients.filter(
+    (patient) =>
+      matchesQuery(patient) &&
+      (selectedTheatreNumber === "all" ||
+        (patient.theatre_id ? theatreNumberById.get(patient.theatre_id) === selectedTheatreNumber : false))
+  );
   const plannedFilteredPatients = plannedPatients.filter(matchesQuery);
   const unresolvedFilteredPatients = unresolvedPatients.filter(matchesQuery);
 
@@ -151,14 +168,23 @@ export function CepodWorkflow({
 
   return (
     <div className="space-y-4">
+      <TheatreFilterTabs
+        selectedTheatreNumber={selectedTheatreNumber}
+        onSelect={(theatreNumber) => {
+          setSelectedTheatreNumber(theatreNumber);
+          setExpandedId("");
+        }}
+      />
+
       <PatientListCard
+        id="cepod-list"
         title={`CEPOD list ${formatLongDate(displayDate)}`}
         description={canManageWorkflow ? "Drag patients to reorder the live list. Use the arrow to expand workflow details." : "Review the current CEPOD list. Use the arrow to view patient and pathway details."}
         firstColumnHeader="Order"
         query={query}
         onQueryChange={setQuery}
         patients={cepodFilteredPatients}
-        emptyMessage="No CEPOD patients match this search."
+        emptyMessage={selectedTheatreNumber === "all" ? "No CEPOD patients match this search." : `No CEPOD patients are listed for Theatre ${selectedTheatreNumber}.`}
         renderPatient={(patient, index) => (
           <PatientListEntry
             key={patient.id}
@@ -215,7 +241,7 @@ export function CepodWorkflow({
         )}
       />
 
-      {createPatient}
+      {canCreatePatients ? <PatientCreateForm suites={suites} theatres={theatres} recoveryAreas={recoveryAreas} /> : null}
 
       <WorkflowTimeline stages={stages} patient={expandedPatient} />
 
@@ -252,6 +278,50 @@ export function CepodWorkflow({
           />
         )}
       />
+    </div>
+  );
+}
+
+function TheatreFilterTabs({
+  selectedTheatreNumber,
+  onSelect
+}: {
+  selectedTheatreNumber: "all" | number;
+  onSelect: (theatreNumber: "all" | number) => void;
+}) {
+  const tabs: Array<{ value: "all" | number; label: string }> = [
+    { value: "all", label: "All theatres" },
+    ...[1, 2, 3, 4, 5].map((theatreNumber) => ({ value: theatreNumber, label: `Theatre ${theatreNumber}` }))
+  ];
+
+  return (
+    <div
+      className="flex flex-wrap gap-2 pt-1"
+      role="tablist"
+      aria-label="Filter CEPOD list by theatre"
+      data-testid="cepod-theatre-filter"
+    >
+      {tabs.map((tab) => {
+        const selected = selectedTheatreNumber === tab.value;
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls="cepod-list"
+            className={cn(
+              "clinical-card min-h-11 cursor-pointer rounded-lg border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors",
+              selected
+                ? "border-primary bg-cyan-50 text-primary dark:bg-cyan-950/30"
+                : "hover:border-primary hover:bg-muted"
+            )}
+            onClick={() => onSelect(tab.value)}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

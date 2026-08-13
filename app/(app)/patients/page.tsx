@@ -1,6 +1,5 @@
 import { Activity, AlertTriangle, Bell } from "lucide-react";
 import { CepodWorkflow } from "@/components/workflow/cepod-workflow";
-import { PatientCreateForm } from "@/components/workflow/patient-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActivePatients, getDelayReasons, getInfrastructureEvents, getWorkflowStages } from "@/lib/repositories/workflow-repository";
@@ -70,11 +69,14 @@ export default async function PatientsPage() {
 
       <CepodWorkflow
         patients={patients}
+        suites={locations.suites}
+        theatres={locations.theatres}
+        recoveryAreas={locations.recovery_areas}
         stages={stages}
         delayReasons={delayReasons}
         todayIso={new Date().toISOString()}
         canManageWorkflow={canManageWorkflow}
-        createPatient={canCreatePatients ? <PatientCreateForm suites={locations.suites} theatres={locations.theatres} recoveryAreas={locations.recovery_areas} /> : null}
+        canCreatePatients={canCreatePatients}
       />
     </div>
   );

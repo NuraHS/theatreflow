@@ -119,6 +119,13 @@ export async function getActivePatients() {
   });
 }
 
+export async function getLiveBoardPatients() {
+  const patients = await getTodaysPatients();
+  const today = localDateKey(new Date());
+
+  return patients.filter((patient) => !patient.cancelled && patient.operation_date === today);
+}
+
 function localDateKey(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);

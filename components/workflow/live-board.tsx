@@ -3,18 +3,24 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, BedDouble, Building2, Clock, MapPin } from "lucide-react";
+import { AlertTriangle, BedDouble, Building2, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
-import type { PatientWithStage, TheatreConfiguration, WorkflowBand } from "@/lib/types/domain";
+import type { PatientWithStage, Theatre, TheatreConfiguration, WorkflowBand } from "@/lib/types/domain";
 import { delayClasses } from "@/lib/utils/delay";
 import { cn } from "@/lib/utils/cn";
 import { priorityLabel, priorityTone } from "@/lib/utils/priority";
 
-const bands: WorkflowBand[] = ["Waiting", "Sent For", "Arrived", "Anaesthetic", "Operating", "Recovery", "Ward"];
+const bandRows: WorkflowBand[][] = [
+  ["Waiting"],
+  ["Sent For", "Arrived"],
+  ["Anaesthetic", "Operating"],
+  ["Recovery"],
+  ["Ward"]
+];
 
 export function LiveBoard({ patients, locations }: { patients: PatientWithStage[]; locations: TheatreConfiguration }) {
   const router = useRouter();
@@ -110,33 +116,19 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 min-[900px]:grid-cols-4 xl:grid-cols-7">
-        {bands.map((band) => {
-          const bandPatients = selectedPatients.filter((patient) => patient.stage.board_band === band);
-          return (
-            <section key={band} className="clinical-card min-h-64 rounded-lg border bg-card p-3">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold uppercase tracking-normal text-muted-foreground">{band}</h2>
-                <Badge tone="blue">{bandPatients.length}</Badge>
-              </div>
-              <div className="space-y-3">
-                {bandPatients.map((patient) => {
-                  const theatre = locations.theatres.find((item) => item.id === patient.theatre_id);
-                  return (
-                    <Card key={patient.id} className={cn("p-3", delayClasses(patient.delay_status))}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div><p className="font-bold">{patient.hospital_number}</p><p className="line-clamp-2 text-sm">{patient.procedure}</p></div>
-                        <Badge tone={priorityTone(patient.cepod_priority)}>{priorityLabel(patient.cepod_priority)}</Badge>
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2"><Badge tone="blue"><MapPin className="h-3 w-3" aria-hidden="true" />{theatre?.name ?? "Unassigned"}</Badge></div>
-                      <div className="mt-3 flex items-center justify-between gap-2 text-sm"><span className="truncate">{patient.consultant}</span><span className="flex items-center gap-1 font-semibold"><Clock className="h-4 w-4" aria-hidden="true" />{patient.elapsed_minutes}m</span></div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+      <div className="space-y-3">
+        {bandRows.map((row) => (
+          <div key={row.join("-")} className={cn("grid grid-cols-1 gap-3", row.length === 2 && "md:grid-cols-2")}>
+            {row.map((band) => (
+              <WorkflowBandList
+                key={band}
+                band={band}
+                patients={selectedPatients.filter((patient) => patient.stage.board_band === band)}
+                theatres={locations.theatres}
+              />
+            ))}
+          </div>
+        ))}
       </div>
 
       <Card>
@@ -160,4 +152,53 @@ export function LiveBoard({ patients, locations }: { patients: PatientWithStage[
 
 function BoardStat({ label, value }: { label: string; value: number }) {
   return <div className="min-w-0"><p className="text-lg font-bold leading-tight">{value}</p><p className="text-[11px] leading-tight text-muted-foreground">{label}</p></div>;
+}
+
+function WorkflowBandList({ band, patients, theatres }: { band: WorkflowBand; patients: PatientWithStage[]; theatres: Theatre[] }) {
+  const heading = band === "Operating" ? "Theatre" : band;
+
+  return (
+    <section data-workflow-band={band} className="clinical-card min-h-32 rounded-lg border bg-card p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-bold uppercase tracking-normal text-muted-foreground">{heading}</h2>
+        <Badge tone="blue">{patients.length}</Badge>
+      </div>
+      <div className="space-y-2">
+        {patients.map((patient, index) => {
+          const theatre = theatres.find((item) => item.id === patient.theatre_id);
+          return (
+            <div key={patient.id} className="flex min-w-0 items-start gap-2">
+              {band === "Waiting" ? <span className="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary bg-cyan-50 text-sm font-bold text-primary dark:bg-cyan-950/40" aria-label={`Waiting list position ${index + 1}`}>{index + 1}</span> : null}
+              <Card className={cn("min-w-0 flex-1 space-y-1.5 p-2.5", delayClasses(patient.delay_status))}>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="shrink-0 font-bold" title={patient.hospital_number}>{patient.hospital_number}</p>
+                  <span className="text-muted-foreground" aria-hidden="true">·</span>
+                  <p className="truncate text-sm font-medium" title={patient.procedure}>{patient.procedure}</p>
+                </div>
+                <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                  <span className="truncate" title={patient.consultant}>{shortConsultantName(patient.consultant)}</span>
+                  <span className="flex shrink-0 items-center justify-end gap-1">
+                    <Badge tone="blue" className="px-2 py-0.5" aria-label={theatre ? theatre.name : "Theatre unassigned"}>{theatre ? `T${theatre.display_order}` : "T—"}</Badge>
+                    <Badge tone={priorityTone(patient.cepod_priority)} className="px-2 py-0.5" aria-label={`Priority ${priorityLabel(patient.cepod_priority)}`}>{priorityLabel(patient.cepod_priority)}</Badge>
+                    <Badge className="gap-1 px-2 py-0.5" aria-label={`${patient.elapsed_minutes} minutes in current stage`}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{patient.elapsed_minutes}m</Badge>
+                  </span>
+                </div>
+              </Card>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function shortConsultantName(name: string) {
+  const trimmed = name.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length <= 2 || trimmed.includes("/")) return trimmed;
+
+  const surnameParticles = new Set(["da", "de", "del", "der", "du", "la", "le", "van", "von", "st", "st."]);
+  let surnameStart = parts.length - 1;
+  while (surnameStart > 1 && surnameParticles.has(parts[surnameStart - 1].toLowerCase())) surnameStart -= 1;
+  return `${parts[0]} ${parts.slice(surnameStart).join(" ")}`;
 }
