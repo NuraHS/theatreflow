@@ -412,23 +412,24 @@ create table if not exists public.theatres (
 );
 
 insert into public.theatre_suites (code, name, display_order)
-values ('st-james', 'St James''', 1), ('atkinson-morley', 'Atkinson Morley', 2), ('gynae', 'Gynae', 3)
+values ('st-helier-a2', 'St Helier A2 Theatres', 1), ('st-helier-b4', 'B4 Theatres', 2), ('epsom-main', 'Epsom Main Theatres', 3)
 on conflict (code) do update set name = excluded.name, active = true, display_order = excluded.display_order;
 
 insert into public.recovery_areas (suite_id, code, name, capacity, display_order)
-select s.id, s.code || '-recovery', s.name || ' Recovery', case when s.code = 'st-james' then 8 else 6 end, 1
+select s.id, s.code || '-recovery', case s.code when 'st-helier-a2' then 'St Helier A2 Recovery' when 'st-helier-b4' then 'B4 Recovery' else 'Epsom Main Recovery' end, null, 1
 from public.theatre_suites s
-where s.code in ('st-james', 'atkinson-morley', 'gynae')
+where s.code in ('st-helier-a2', 'st-helier-b4', 'epsom-main')
 on conflict (code) do update set suite_id = excluded.suite_id, name = excluded.name, capacity = excluded.capacity, active = true;
 
 insert into public.theatres (suite_id, default_recovery_area_id, code, name, display_order)
-select s.id, r.id, s.code || '-theatre-' || number::text, 'Theatre ' || number::text, number
+select s.id, r.id, s.code || '-theatre-' || number::text, case when s.code = 'st-helier-a2' and number = 1 then 'CEPOD Theatre 1' when s.code = 'st-helier-a2' and number = 3 then 'Trauma Theatre 3' else 'Theatre ' || number::text end, number
 from public.theatre_suites s
 join public.recovery_areas r on r.suite_id = s.id
 cross join generate_series(1, 5) number
-where s.code = 'st-james'
-   or (s.code in ('atkinson-morley', 'gynae') and number <= 3)
-on conflict (code) do update set suite_id = excluded.suite_id, default_recovery_area_id = excluded.default_recovery_area_id, active = true, display_order = excluded.display_order;
+where s.code = 'epsom-main'
+   or (s.code = 'st-helier-a2' and number <= 3)
+   or (s.code = 'st-helier-b4' and number <= 2)
+on conflict (code) do update set suite_id = excluded.suite_id, default_recovery_area_id = excluded.default_recovery_area_id, name = excluded.name, active = true, display_order = excluded.display_order;
 
 alter table public.profiles
   add column if not exists email text,
