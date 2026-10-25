@@ -21,6 +21,7 @@ export type SystemHealthReport = {
   };
   database: {
     status: SystemHealthStatus;
+    detail?: string;
     latency_ms: number | null;
     size_bytes: number | null;
     connection_count: number | null;
@@ -36,6 +37,7 @@ export type SystemHealthReport = {
   };
   authentication: {
     status: SystemHealthStatus;
+    detail?: string;
     active_users: number | null;
   };
   backup: {

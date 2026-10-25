@@ -1,6 +1,7 @@
 import "server-only";
 
 import { statfs } from "node:fs/promises";
+import { connectionFailure, isManagedHosting } from "@/lib/services/health-diagnostics";
 import packageJson from "@/package.json";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { SystemHealthCheck, SystemHealthReport, SystemHealthStatus } from "@/lib/types/system-health";
@@ -30,16 +31,16 @@ export async function getSystemHealthReport(): Promise<SystemHealthReport> {
       id: "database",
       label: "Database",
       status: database.status,
-      summary: statusSummary(database.status, "Database connection is healthy", "Database connection needs attention", "Database is unavailable", "Database is not configured"),
-      detail: database.latency_ms === null ? "No database response time is available." : `Query completed in ${database.latency_ms} ms.`,
+      summary: statusSummary(database.status, "Database connection is healthy", "Database connection needs attention", "Database check failed", "Database is not configured"),
+      detail: database.detail ?? (database.latency_ms === null ? "Configure the Supabase project URL and server-side service-role key in Vercel." : `Query completed in ${database.latency_ms} ms.`),
       latency_ms: database.latency_ms
     },
     {
       id: "authentication",
       label: "Authentication",
       status: authentication.status,
-      summary: statusSummary(authentication.status, "Authentication service is healthy", "Authentication needs attention", "Authentication service is unavailable", "Authentication check is unavailable"),
-      detail: authentication.active_users === null ? "Active user count is unavailable." : `${authentication.active_users} user profiles are configured.`
+      summary: statusSummary(authentication.status, "Authentication service is healthy", "Authentication needs attention", "Authentication check failed", "Authentication check is unavailable"),
+      detail: authentication.detail ?? (authentication.active_users === null ? "Configure the Supabase project URL and server-side service-role key." : `${authentication.active_users} user profiles are configured.`)
     },
     {
       id: "storage",
@@ -53,7 +54,7 @@ export async function getSystemHealthReport(): Promise<SystemHealthReport> {
       label: "Backup",
       status: backup.status,
       summary: backup.last_success_at ? `Last successful backup ${formatRelativeHours(backup.age_hours)}` : "No successful backup has been recorded",
-      detail: "Backup events are recorded locally and included in the support bundle."
+      detail: isManagedHosting() ? "This checks Theatreflow backup records, not provider-managed backups. Verify backup availability in Supabase." : "Backup events are recorded in Theatreflow and included in the support bundle."
     },
     {
       id: "migration",
@@ -66,15 +67,15 @@ export async function getSystemHealthReport(): Promise<SystemHealthReport> {
       id: "certificate",
       label: "Certificate",
       status: certificate.status,
-      summary: certificate.expires_at ? `${certificate.days_remaining} days remaining` : "Certificate expiry is not configured",
-      detail: certificate.expires_at ? `Expires ${new Date(certificate.expires_at).toLocaleDateString("en-GB", { dateStyle: "long" })}.` : "Set THEATREFLOW_CERTIFICATE_EXPIRES_AT on the local server."
+      summary: certificate.expires_at ? `${certificate.days_remaining} days remaining` : isManagedHosting() ? "Certificate managed by hosting provider" : "Certificate expiry is not configured",
+      detail: certificate.expires_at ? `Expires ${new Date(certificate.expires_at).toLocaleDateString("en-GB", { dateStyle: "long" })}.` : isManagedHosting() ? "HTTPS certificates are managed by the hosting provider; expiry is not measured by this check." : "Set THEATREFLOW_CERTIFICATE_EXPIRES_AT on the local server."
     }
   ];
 
   return {
     generated_at: generatedAt,
     overall_status: overallStatus(checks),
-    deployment_mode: process.env.THEATREFLOW_DEPLOYMENT_MODE ?? "Local / on-premises ready",
+    deployment_mode: isManagedHosting() ? "Cloud hosting / Supabase" : process.env.THEATREFLOW_DEPLOYMENT_MODE ?? "Local / on-premises ready",
     application: {
       version: packageJson.version,
       node_version: process.version,
@@ -109,9 +110,10 @@ export function publicHealthReport(report: SystemHealthReport) {
 async function checkDatabase(supabase: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<SystemHealthReport["database"]> {
   if (!supabase) return { status: "unknown", latency_ms: null, size_bytes: null, connection_count: null, max_connections: null };
   const started = performance.now();
-  const ping = await supabase.from("workflows").select("id", { head: true, count: "exact" });
+  // A small GET preserves provider error codes; HEAD responses omit the error body.
+  const ping = await supabase.from("workflows").select("id").limit(1);
   const latency = Math.max(0, Math.round(performance.now() - started));
-  if (ping.error) return { status: "critical", latency_ms: latency, size_bytes: null, connection_count: null, max_connections: null };
+  if (ping.error) return { ...connectionFailure(ping.error, ping.status), latency_ms: latency, size_bytes: null, connection_count: null, max_connections: null };
 
   const metricsResult = await supabase.rpc("get_theatreflow_database_metrics");
   const metrics = asRecord(metricsResult.data);
@@ -131,23 +133,26 @@ async function checkAuthentication(supabase: ReturnType<typeof createServiceRole
     supabase.from("profiles").select("id", { head: true, count: "exact" })
   ]);
   return {
-    status: authResult.error ? "critical" : "healthy",
+    ...(authResult.error ? connectionFailure(authResult.error) : profilesResult.error ? { status: "warning" as const, detail: "The authentication admin API responded, but user profiles could not be counted. Check the profiles table and its permissions." } : { status: "healthy" as const }),
     active_users: profilesResult.error ? null : profilesResult.count ?? 0
   };
 }
 
 async function checkStorage(): Promise<SystemHealthReport["storage"]> {
+  const configuredPath = process.env.THEATREFLOW_STORAGE_PATH;
+  if (isManagedHosting() || !configuredPath) {
+    return { status: "unknown", source: isManagedHosting() ? "Supabase storage capacity is not measured by this app. View database and file storage usage in the Supabase dashboard; Vercel filesystem usage is unrelated." : "No data volume configured. Set THEATREFLOW_STORAGE_PATH to monitor an on-premises data volume.", total_bytes: null, used_bytes: null, available_bytes: null, utilisation_percent: null };
+  }
   try {
-    const configuredPath = process.env.THEATREFLOW_STORAGE_PATH;
-    const stats = await statfs(configuredPath ?? process.cwd());
+    const stats = await statfs(configuredPath);
     const total = stats.blocks * stats.bsize;
     const available = stats.bavail * stats.bsize;
     const used = Math.max(0, total - available);
     const utilisation = total ? Math.round((used / total) * 100) : null;
     const configuredStatus = utilisation === null ? "unknown" : utilisation >= 95 ? "critical" : utilisation >= 85 ? "warning" : "healthy";
     return {
-      status: configuredPath ? configuredStatus : "unknown",
-      source: configuredPath ? "Configured Theatreflow data volume" : "Application filesystem; configure THEATREFLOW_STORAGE_PATH for the database volume",
+      status: configuredStatus,
+      source: "Configured Theatreflow data volume",
       total_bytes: total,
       used_bytes: used,
       available_bytes: available,
