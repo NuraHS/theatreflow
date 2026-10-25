@@ -33,8 +33,8 @@ export async function GET() {
     supabase.from("profile_theatre_access").select("profile_id,theatre_id"),
     supabase.from("profile_specialty_access").select("profile_id,specialty")
   ]);
-  const error = profiles.error ?? suiteAccess.error ?? theatreAccess.error;
-  if (error) return NextResponse.json({ error: `${error.message} Run migration 0010_authentication_roles_and_theatre_locations.sql.` }, { status: 400 });
+  const error = profiles.error ?? suiteAccess.error ?? theatreAccess.error ?? specialtyAccess.error;
+  if (error) return NextResponse.json({ error: `${error.message} Check the database connection and required schema. Do not rerun older migrations solely to recover an account.` }, { status: 400 });
 
   const users: UserProfile[] = (profiles.data ?? []).map((profile) => ({
     ...profile,

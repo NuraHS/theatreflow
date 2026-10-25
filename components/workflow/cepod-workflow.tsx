@@ -123,6 +123,18 @@ export function CepodWorkflow({
     },
     [suites, theatres]
   );
+  const selectedSuite = suites.find((suite) => suite.id === selectedSuiteId);
+  const scopedTheatres = theatres.filter((theatre) => theatre.active &&
+    (selectedSuiteId === "all" || theatre.suite_id === selectedSuiteId));
+  const selectedTheatre = selectedSuite && selectedTheatreNumber !== "all"
+    ? scopedTheatres.find((theatre) => theatre.display_order === selectedTheatreNumber)
+    : undefined;
+  const listLocation = selectedTheatre
+    ? `${selectedSuite!.name.replace(/\s+Theatres?$/i, "")} ${selectedTheatre.name}`
+    : selectedTheatreNumber !== "all"
+      ? `Theatre ${selectedTheatreNumber} across accessible suites`
+      : selectedSuite?.name ?? "Theatres";
+
   const cepodFilteredPatients = cepodPatients.filter(
     (patient) => {
       const location = patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined;
@@ -191,6 +203,7 @@ export function CepodWorkflow({
     <div className="space-y-4">
       <TheatreFilterTabs
         suites={suites}
+        theatres={scopedTheatres}
         selectedSuiteId={selectedSuiteId}
         selectedTheatreNumber={selectedTheatreNumber}
         onSelectSuite={(suiteId) => {
@@ -206,13 +219,13 @@ export function CepodWorkflow({
 
       <PatientListCard
         id="cepod-list"
-        title={`CEPOD list ${formatLongDate(displayDate)}`}
-        description={canManageWorkflow ? "Drag patients to reorder the live list. Use the arrow to expand workflow details." : "Review the current CEPOD list. Use the arrow to view patient and pathway details."}
+        title={`${listLocation} - ${formatLongDate(displayDate)}`}
+        description={canManageWorkflow ? "Drag patients to reorder the live list. Use the arrow to expand workflow details." : "Review the current theatre list. Use the arrow to view patient and pathway details."}
         firstColumnHeader="Order"
         query={query}
         onQueryChange={setQuery}
         patients={cepodFilteredPatients}
-        emptyMessage="No CEPOD patients match the selected suite, theatre or search."
+        emptyMessage="No theatre patients match the selected suite, theatre or search."
         renderPatient={(patient, index) => (
           <PatientListEntry
             key={patient.id}
@@ -315,12 +328,14 @@ export function CepodWorkflow({
 
 function TheatreFilterTabs({
   suites,
+  theatres,
   selectedSuiteId,
   selectedTheatreNumber,
   onSelectSuite,
   onSelect
 }: {
   suites: TheatreSuite[];
+  theatres: Theatre[];
   selectedSuiteId: string;
   selectedTheatreNumber: "all" | number;
   onSelectSuite: (suiteId: string) => void;
@@ -328,7 +343,13 @@ function TheatreFilterTabs({
 }) {
   const tabs: Array<{ value: "all" | number; label: string }> = [
     { value: "all", label: "All theatres" },
-    ...[1, 2, 3, 4, 5].map((theatreNumber) => ({ value: theatreNumber, label: `Theatre ${theatreNumber}` }))
+    ...[...new Set(theatres.map((theatre) => theatre.display_order))]
+      .sort((a, b) => a - b)
+      .map((theatreNumber) => ({
+        value: theatreNumber,
+        label: selectedSuiteId === "all" ? `Theatre ${theatreNumber}` :
+          theatres.find((theatre) => theatre.display_order === theatreNumber)?.name ?? `Theatre ${theatreNumber}`
+      }))
   ];
 
   return (
@@ -336,7 +357,7 @@ function TheatreFilterTabs({
       <Select
         value={selectedSuiteId}
         onChange={(event) => onSelectSuite(event.target.value)}
-        aria-label="Filter CEPOD list by theatre suite"
+        aria-label="Filter patient list by theatre suite"
         className="clinical-card w-auto min-w-52 rounded-lg bg-card font-semibold"
       >
         <option value="all">All accessible suites</option>
@@ -345,7 +366,7 @@ function TheatreFilterTabs({
       <div
         className="flex flex-wrap gap-2"
         role="tablist"
-        aria-label="Filter CEPOD list by theatre"
+        aria-label="Filter patient list by theatre"
         data-testid="cepod-theatre-filter"
       >
         {tabs.map((tab) => {

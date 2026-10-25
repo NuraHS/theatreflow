@@ -19,6 +19,7 @@ type NewUserAccess = Omit<EditableAccess, "full_name" | "job_title"> & { full_na
 export function UserAccessPanel({ locations }: { locations: TheatreConfiguration }) {
   const [users, setUsers] = React.useState<UserProfile[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [showCreate, setShowCreate] = React.useState(false);
   const [newUser, setNewUser] = React.useState<NewUserAccess>({
@@ -36,12 +37,20 @@ export function UserAccessPanel({ locations }: { locations: TheatreConfiguration
 
   const loadUsers = React.useCallback(async (announce = false) => {
     setLoading(true);
-    const response = await fetch("/api/admin/users", { cache: "no-store" });
-    const result = (await response.json()) as { users?: UserProfile[]; error?: string };
-    setLoading(false);
-    if (!response.ok) return toast.error(result.error ?? "Unable to load user profiles.");
-    setUsers(result.users ?? []);
-    if (announce) toast.success("User access refreshed.");
+    setLoadError(null);
+    try {
+      const response = await fetch("/api/admin/users", { cache: "no-store" });
+      const result = (await response.json()) as { users?: UserProfile[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Unable to load user profiles.");
+      setUsers(result.users ?? []);
+      if (announce) toast.success("User access refreshed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load user profiles.";
+      setLoadError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   React.useEffect(() => { void loadUsers(); }, [loadUsers]);
@@ -92,7 +101,8 @@ export function UserAccessPanel({ locations }: { locations: TheatreConfiguration
       <div className="grid gap-4 xl:grid-cols-2">
         {users.map((user) => <UserAccessCard key={user.id} user={user} locations={locations} onSaved={() => void loadUsers()} />)}
       </div>
-      {!loading && !users.length ? <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No authentication profiles are available. Apply migration 0010, then create the first administrator while role enforcement is disabled.</CardContent></Card> : null}
+      {loadError ? <Card><CardContent className="p-5 text-sm text-destructive"><strong>User list could not be loaded.</strong><p className="mt-1">{loadError}</p><p className="mt-1">This does not mean accounts were deleted. Refresh after resolving the error.</p></CardContent></Card> : null}
+      {!loading && !loadError && !users.length ? <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No Theatreflow access profiles were returned by this installation. This does not establish whether authentication accounts exist. Check Authentication → Users in the connected Supabase project before creating an account. Do not rerun migration 0010 to recover a login.</CardContent></Card> : null}
     </div>
   );
 }
