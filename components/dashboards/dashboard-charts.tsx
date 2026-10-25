@@ -93,6 +93,7 @@ export function DashboardCharts({ patients, events, delayReasons, theatreConfigu
   const specialties = [...new Set([...SUPPORTED_SPECIALTIES, ...patients.map((patient) => patient.specialty)])];
   const locationLabel = getLocationLabel(location, theatreConfiguration);
   const rangeLabel = formatRange(range);
+  const weeklyCaseSeries = (Date.parse(range.endKey) - Date.parse(range.startKey)) / 86_400_000 + 1 > 31;
   const caseSeriesMode = range.startKey === range.endKey && location === "all"
     ? "theatre"
     : range.startKey === range.endKey && location.startsWith("theatre:")
@@ -108,7 +109,7 @@ export function DashboardCharts({ patients, events, delayReasons, theatreConfigu
     ? `Listed cases by theatre · ${rangeLabel}`
     : caseSeriesMode === "specialty"
       ? `${locationLabel} · ${rangeLabel}`
-      : `Listed cases · ${rangeLabel}`;
+      : `${weeklyCaseSeries ? "Weekly totals · weeks start Monday" : "Daily totals"} · ${rangeLabel}`;
   const delayReasonEvents = delayStage === "all" ? rangeEvents.filter((event) => event.delay_reason_ids.length) : rangeEvents.filter((event) => event.workflow_stage_id === delayStage && event.delay_reason_ids.length);
   const delayReasonPatientsAffected = new Set(delayReasonEvents.map((event) => event.patient_id)).size;
   const delays = buildDelayData(rangeEvents, delayReasons, delayStage);
@@ -163,7 +164,7 @@ export function DashboardCharts({ patients, events, delayReasons, theatreConfigu
     <Card className="border-primary/20 bg-gradient-to-br from-card to-secondary/30"><CardHeader><CardTitle>Case summary</CardTitle><p className="text-sm text-muted-foreground">{rangeLabel}{specialty === "all" ? " · All specialties" : ` · ${specialty}`} · {locationLabel}</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"><Summary label="Total cases" value={dashboardPatients.length} detail="All patients who were on either the CEPOD list or planned list during the selected period, including patients completed or cancelled during that period." featured /><Summary label="Currently waiting" value={waitingPatients.length} detail="Patients on the CEPOD list at the end of the selected period who are still waiting to be sent for. Planned, completed and cancelled patients are not included." /><Summary label="In anaesthetic" value={anaestheticPatients.length} detail="Patients on the CEPOD list who have arrived in the anaesthetic room or whose anaesthetic has started." /><Summary label="In theatre" value={theatrePatients.length} detail="Patients on the CEPOD list who are in theatre, whose operation has started, or whose operation has finished but who have not yet entered recovery." /><Summary label="In recovery" value={recoveryPatients.length} detail="Patients on the CEPOD list who are currently in recovery and have not yet left recovery." /><Summary label="Completed cases" value={completedPatients.length} detail="Patients who completed surgery and left recovery during the selected period." /><Summary label="Cancelled" value={cancelledPatients.length} detail="Patients whose case was cancelled during the selected period." /><Summary label="Delayed cases" value={delayedPatients.length} detail="Patients who experienced at least one recorded delay during the selected period." /><Summary label="Patients on planned list" value={plannedPatients.length} detail="Patients whose most recent list entry at the end of the selected period places them on the planned list. They remain counted each day until they move to CEPOD, complete or are cancelled." /><Summary label="Cases experiencing delay" value={`${delayedRate}%`} detail="Delayed cases as a percentage of the total cases in the selected period." /><Summary label="Completion rate" value={`${completionRate}%`} detail="Completed cases as a percentage of the total cases in the selected period." /><Summary label="Cancellation rate" value={`${cancellationRate}%`} detail="Cancelled cases as a percentage of the total cases in the selected period." /><Summary label="Unresolved" value={unresolvedPatients.length} detail={'Patients whose pathway has not been updated within the reconciliation period. Please go to "Unresolved Patients" on the patients page to confirm their current stage.'} /></CardContent></Card>
 
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-      <ChartCard title={caseChartTitle} subtitle={caseChartSubtitle}><div className="h-[340px] min-w-0 w-full"><BarChart responsive style={responsiveChartStyle} data={caseSeries} margin={{ top: 8, right: 8, left: -12, bottom: caseSeriesMode === "specialty" ? 54 : 18 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" interval={0} height={caseSeriesMode === "specialty" ? 62 : 30} tick={caseSeriesMode === "specialty" ? <SpecialtyAxisTick /> : undefined} /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} />{caseSeriesMode === "specialty" ? <Bar dataKey="Cases" fill="#0891b2" radius={[4, 4, 0, 0]} isAnimationActive={false} /> : <><Legend content={<SpecialtyLegend />} />{specialties.map((item, index) => <Bar key={item} dataKey={item} stackId="cases" fill={specialtyColour(item, index)} isAnimationActive={false} />)}</>}</BarChart></div></ChartCard>
+      <ChartCard title={caseChartTitle} subtitle={caseChartSubtitle}><div className="h-[340px] min-w-0 w-full"><BarChart responsive style={responsiveChartStyle} data={caseSeries} margin={{ top: 8, right: 8, left: -12, bottom: caseSeriesMode === "specialty" ? 54 : 18 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" interval={caseSeriesMode === "date" ? "preserveStartEnd" : 0} minTickGap={caseSeriesMode === "date" ? 16 : 5} tickMargin={8} height={caseSeriesMode === "specialty" ? 62 : 36} tick={caseSeriesMode === "specialty" ? <SpecialtyAxisTick /> : { fontSize: 11 }} /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} labelFormatter={(label, payload) => caseSeriesMode === "date" ? String(payload?.[0]?.payload?.tooltipDate ?? label) : label} />{caseSeriesMode === "specialty" ? <Bar dataKey="Cases" fill="#0891b2" radius={[4, 4, 0, 0]} isAnimationActive={false} /> : <><Legend content={<SpecialtyLegend />} />{specialties.map((item, index) => <Bar key={item} dataKey={item} stackId="cases" fill={specialtyColour(item, index)} isAnimationActive={false} />)}</>}</BarChart></div></ChartCard>
       <ChartCard title="Case outcomes" subtitle={`Priority mix · ${rangeLabel}`}><div className="h-[350px] min-w-0 w-full"><BarChart responsive style={responsiveChartStyle} data={outcomes} margin={{ top: 8, right: 8, left: -12, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" tick={<OutcomeTick />} interval={0} height={54} /><YAxis allowDecimals={false} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} /><Legend /><Bar dataKey="P1" stackId="priority" fill="#dc2626" isAnimationActive={false} /><Bar dataKey="P2" stackId="priority" fill="#f59e0b" isAnimationActive={false} /><Bar dataKey="P3" stackId="priority" fill="#16a34a" isAnimationActive={false} /><Bar dataKey="P4" stackId="priority" fill="#2563eb" radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart></div></ChartCard>
     </div>
 
@@ -257,7 +258,32 @@ function getStageAt(patient: PatientWithStage, events: WorkflowEvent[], at: Date
     .filter((event) => event.patient_id === patient.id && Date.parse(event.timestamp) <= at.getTime())
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0]?.workflow_stage_id ?? "patient-on-list";
 }
-function buildCaseSeries(patients: PatientWithStage[], range: Range) { const days = Math.floor((range.end.getTime() - range.start.getTime()) / 86_400_000) + 1; const weekly = days > 31; const buckets = new Map<string, Record<string, string | number>>(); const cursor = weekly ? startOfWeek(range.start) : new Date(range.start); const final = weekly ? startOfWeek(range.end) : new Date(range.end); while (cursor <= final) { const key = localDateKey(cursor); buckets.set(key, { label: weekly ? `w/c ${cursor.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : cursor.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) }); cursor.setDate(cursor.getDate() + (weekly ? 7 : 1)); } patients.forEach((patient) => { const date = new Date(`${dateKey(patient.operation_date ?? patient.created_at)}T12:00:00`); const anchor = weekly ? startOfWeek(date) : date; const key = localDateKey(anchor); const bucket = buckets.get(key); if (!bucket) return; bucket[patient.specialty] = Number(bucket[patient.specialty] ?? 0) + 1; }); return [...buckets.values()]; }
+export function buildCaseSeries(patients: PatientWithStage[], range: Range) {
+  // Count calendar days so the October clock change cannot turn a month into 32 days.
+  const days = (Date.parse(range.endKey) - Date.parse(range.startKey)) / 86_400_000 + 1;
+  const weekly = days > 31;
+  const sameMonth = range.startKey.slice(0, 7) === range.endKey.slice(0, 7);
+  const buckets = new Map<string, Record<string, string | number>>();
+  const cursor = weekly ? startOfWeek(range.start) : new Date(range.start);
+  const final = weekly ? startOfWeek(range.end) : new Date(range.end);
+  while (cursor <= final) {
+    const key = localDateKey(cursor);
+    const shortDate = cursor.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    buckets.set(key, {
+      label: !weekly && sameMonth ? String(cursor.getDate()) : shortDate,
+      tooltipDate: `${weekly ? "Week commencing " : ""}${cursor.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`
+    });
+    cursor.setDate(cursor.getDate() + (weekly ? 7 : 1));
+  }
+  patients.forEach((patient) => {
+    const date = new Date(`${dateKey(patient.operation_date ?? patient.created_at)}T12:00:00`);
+    const anchor = weekly ? startOfWeek(date) : date;
+    const bucket = buckets.get(localDateKey(anchor));
+    if (!bucket) return;
+    bucket[patient.specialty] = Number(bucket[patient.specialty] ?? 0) + 1;
+  });
+  return [...buckets.values()];
+}
 function buildTheatreCaseSeries(patients: PatientWithStage[], configuration: TheatreConfiguration) {
   const suites = new Map(configuration.suites.map((suite) => [suite.id, suite]));
   const suiteOrder = new Map(configuration.suites.map((suite) => [suite.id, suite.display_order]));

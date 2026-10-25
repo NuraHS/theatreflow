@@ -9,16 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import type { DelayReason, PatientWithStage, WorkflowEvent } from "@/lib/types/domain";
+import type { DelayReason, PatientWithStage, TheatreConfiguration, WorkflowEvent } from "@/lib/types/domain";
 
 type DatePreset = "today" | "7d" | "month" | "year" | "custom";
 type DelayLength = "all" | "under30" | "30-60" | "60-90" | "90-120" | "120-180" | "over180";
 type ReportRow = {
+  locationKey: string; suite: string; theatre: string;
   hospitalNumber: string; procedure: string; specialty: string; consultant: string; priority: string; status: string;
   dateBooked: string; dateBookedKey: string; recordDate: string; cancellationReason: string; delay: "Yes" | "No"; delayReason: string; stagesAffected: string; delayMinutes: number;
 };
 
 const columns: ColumnDef<ReportRow>[] = [
+  { accessorKey: "suite", header: "Theatre suite" }, { accessorKey: "theatre", header: "Theatre" },
   { accessorKey: "hospitalNumber", header: "Hospital number" }, { accessorKey: "procedure", header: "Procedure" },
   { accessorKey: "specialty", header: "Specialty" }, { accessorKey: "consultant", header: "Consultant" },
   { accessorKey: "priority", header: "Priority" }, { accessorKey: "status", header: "Status" },
@@ -27,14 +29,14 @@ const columns: ColumnDef<ReportRow>[] = [
   { accessorKey: "delayReason", header: "Delay reason" }, { accessorKey: "stagesAffected", header: "Stages affected" }, { accessorKey: "delayMinutes", header: "Delay length (minutes)" }
 ];
 const exportHeaders = columns.map((column) => String(column.header));
-const rowValues = (row: ReportRow) => [row.hospitalNumber, row.procedure, row.specialty, row.consultant, row.priority, row.status, row.dateBooked, row.recordDate, row.cancellationReason, row.delay, row.delayReason, row.stagesAffected, row.delayMinutes];
+const rowValues = (row: ReportRow) => [row.suite, row.theatre, row.hospitalNumber, row.procedure, row.specialty, row.consultant, row.priority, row.status, row.dateBooked, row.recordDate, row.cancellationReason, row.delay, row.delayReason, row.stagesAffected, row.delayMinutes];
 const workflowStageLabels: Record<string, string> = {
   "patient-on-list": "Patient on list", "sent-for": "Patient sent for", "patient-arrived": "Patient arrived in Theatres",
   "anaesthetic-started": "Anaesthetic started", "patient-in-theatre": "Patient in Theatre", "operation-started": "Operation started",
   "operation-finished": "Operation finished", "patient-in-recovery": "Patient in Recovery", "patient-out-of-recovery": "Patient out of Recovery"
 };
 
-export function PatientReportTable({ patients, events, delayReasons }: { patients: PatientWithStage[]; events: WorkflowEvent[]; delayReasons: DelayReason[] }) {
+export function PatientReportTable({ patients, events, delayReasons, theatreConfiguration }: { patients: PatientWithStage[]; events: WorkflowEvent[]; delayReasons: DelayReason[]; theatreConfiguration: TheatreConfiguration }) {
   const today = localDateKey(new Date());
   const monthStart = localDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [datePreset, setDatePreset] = React.useState<DatePreset>("month");
@@ -46,16 +48,30 @@ export function PatientReportTable({ patients, events, delayReasons }: { patient
   const [delayReason, setDelayReason] = React.useState("all");
   const [stageAffected, setStageAffected] = React.useState("all");
   const [delayLength, setDelayLength] = React.useState<DelayLength>("all");
+  const [selectedLocations, setSelectedLocations] = React.useState<string[] | null>(null);
+  const locationKeys = React.useMemo(() => {
+    const known = theatreConfiguration.theatres.map((theatre) => theatre.id);
+    if (patients.some((patient) => !patient.theatre_id || !known.includes(patient.theatre_id))) known.push("other");
+    return known;
+  }, [patients, theatreConfiguration]);
+  const locationSelected = (id: string) => selectedLocations === null || selectedLocations.includes(id);
+  function toggleLocations(ids: string[], checked: boolean) {
+    setSelectedLocations((current) => {
+      const next = new Set(current ?? locationKeys);
+      ids.forEach((id) => checked ? next.add(id) : next.delete(id));
+      return locationKeys.every((id) => next.has(id)) ? null : [...next];
+    });
+  }
 
   const reasonLabels = React.useMemo(() => new Map(delayReasons.map((reason) => [reason.id, reason.label])), [delayReasons]);
-  const allRows = React.useMemo(() => buildRows(patients, events, reasonLabels), [patients, events, reasonLabels]);
+  const allRows = React.useMemo(() => buildRows(patients, events, reasonLabels, theatreConfiguration), [patients, events, reasonLabels, theatreConfiguration]);
   const dateRange = React.useMemo(() => getDateRange(datePreset, customStart, customEnd), [datePreset, customStart, customEnd]);
   const specialties = React.useMemo(() => [...new Set(patients.map((patient) => patient.specialty))].sort(), [patients]);
   const consultants = React.useMemo(() => [...new Set(patients.filter((patient) => specialty === "all" || patient.specialty === specialty).map((patient) => patient.consultant))].sort(), [patients, specialty]);
-  const filteredRows = React.useMemo(() => allRows.filter((row) => row.dateBookedKey >= dateRange.start && row.dateBookedKey <= dateRange.end && (specialty === "all" || row.specialty === specialty) && (consultant === "all" || row.consultant === consultant) && (priority === "all" || row.priority === priority) && (delayReason === "all" || row.delayReason.split("\n").includes(reasonLabels.get(delayReason) ?? delayReason)) && (stageAffected === "all" || row.stagesAffected.split("\n").includes(workflowStageLabels[stageAffected] ?? stageAffected)) && matchesDelayLength(row.delayMinutes, delayLength)), [allRows, consultant, dateRange, delayLength, delayReason, priority, reasonLabels, specialty, stageAffected]);
+  const filteredRows = React.useMemo(() => allRows.filter((row) => (selectedLocations === null || selectedLocations.includes(row.locationKey)) && row.dateBookedKey >= dateRange.start && row.dateBookedKey <= dateRange.end && (specialty === "all" || row.specialty === specialty) && (consultant === "all" || row.consultant === consultant) && (priority === "all" || row.priority === priority) && (delayReason === "all" || row.delayReason.split("\n").includes(reasonLabels.get(delayReason) ?? delayReason)) && (stageAffected === "all" || row.stagesAffected.split("\n").includes(workflowStageLabels[stageAffected] ?? stageAffected)) && matchesDelayLength(row.delayMinutes, delayLength)), [allRows, consultant, dateRange, delayLength, delayReason, priority, reasonLabels, specialty, stageAffected, selectedLocations]);
   const table = useReactTable({ data: filteredRows, columns, getCoreRowModel: getCoreRowModel() });
 
-  function resetFilters() { setDatePreset("month"); setCustomStart(monthStart); setCustomEnd(today); setSpecialty("all"); setConsultant("all"); setPriority("all"); setDelayReason("all"); setStageAffected("all"); setDelayLength("all"); }
+  function resetFilters() { setSelectedLocations(null); setDatePreset("month"); setCustomStart(monthStart); setCustomEnd(today); setSpecialty("all"); setConsultant("all"); setPriority("all"); setDelayReason("all"); setStageAffected("all"); setDelayLength("all"); }
   function exportCsv() { const csvRows = [exportHeaders, ...filteredRows.map((row) => rowValues(row).map(csvExportValue))]; const csv = `\uFEFF${csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`; download(new Blob([csv], { type: "text/csv;charset=utf-8" }), exportFilename("csv")); }
   function exportExcel() { const body = filteredRows.map((row) => `<tr>${rowValues(row).map((value) => `<td>${escapeHtml(String(value)).replaceAll("\n", "<br>")}</td>`).join("")}</tr>`).join(""); const html = `<html><head><meta charset="utf-8" /></head><body><table><thead><tr>${exportHeaders.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></body></html>`; download(new Blob([html], { type: "application/vnd.ms-excel" }), exportFilename("xls")); }
   function exportPdf() { const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" }); doc.text(`Theatreflow CEPOD Audit — ${dateRange.start} to ${dateRange.end}`, 14, 14); autoTable(doc, { startY: 20, head: [exportHeaders], body: filteredRows.map(rowValues), styles: { fontSize: 6, cellPadding: 1.5, overflow: "linebreak" }, headStyles: { fillColor: [8, 145, 178] } }); doc.save(exportFilename("pdf")); }
@@ -72,11 +88,32 @@ export function PatientReportTable({ patients, events, delayReasons }: { patient
       <FilterField label="Delay length"><Select value={delayLength} onChange={(event) => setDelayLength(event.target.value as DelayLength)}><option value="all">All delay lengths</option><option value="under30">Under 30 minutes</option><option value="30-60">30–60 minutes</option><option value="60-90">60–90 minutes</option><option value="90-120">90–120 minutes</option><option value="120-180">120–180 minutes</option><option value="over180">Over 180 minutes</option></Select></FilterField>
     </CardContent></Card>
 
+    <Card><CardHeader><CardTitle>Suites and theatres</CardTitle><p className="text-sm text-muted-foreground">Select any combination of suites or individual theatres. The table and every export use this selection.</p></CardHeader><CardContent className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={selectedLocations === null} onChange={(event) => setSelectedLocations(event.target.checked ? null : [])} />All accessible locations</label>
+        <Button type="button" variant="outline" onClick={() => setSelectedLocations([])}>Clear selection</Button>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {theatreConfiguration.suites.map((suite) => {
+          const suiteTheatres = theatreConfiguration.theatres.filter((theatre) => theatre.suite_id === suite.id);
+          const ids = suiteTheatres.map((theatre) => theatre.id);
+          const allSelected = ids.length > 0 && ids.every(locationSelected);
+          const someSelected = ids.some(locationSelected);
+          return <fieldset key={suite.id} className="rounded-lg border p-3"><legend className="px-1 text-sm font-bold">{suite.name}</legend>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={allSelected} disabled={!ids.length} ref={(input) => { if (input) input.indeterminate = someSelected && !allSelected; }} onChange={(event) => toggleLocations(ids, event.target.checked)} />All theatres in this suite</label>
+            <div className="space-y-1">{suiteTheatres.map((theatre) => <label key={theatre.id} className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={locationSelected(theatre.id)} onChange={(event) => toggleLocations([theatre.id], event.target.checked)} />{theatre.name}</label>)}</div>
+          </fieldset>;
+        })}
+      </div>
+      {locationKeys.includes("other") ? <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={locationSelected("other")} onChange={(event) => toggleLocations(["other"], event.target.checked)} />Other or unassigned locations</label> : null}
+      {selectedLocations?.length === 0 ? <p className="text-sm text-muted-foreground">No locations selected. Select a suite or theatre to include its records.</p> : null}
+    </CardContent></Card>
+
     <Card><CardHeader><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><CardTitle>Audit export</CardTitle><p className="mt-1 text-sm text-muted-foreground">{filteredRows.length} patient{filteredRows.length === 1 ? "" : "s"} match the selected filters.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!filteredRows.length} onClick={exportCsv}><Download className="h-4 w-4" />CSV</Button><Button type="button" variant="outline" disabled={!filteredRows.length} onClick={exportExcel}><Download className="h-4 w-4" />Excel</Button><Button type="button" disabled={!filteredRows.length} onClick={exportPdf}><Download className="h-4 w-4" />PDF</Button></div></div></CardHeader><CardContent><div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[1820px] text-sm"><thead className="bg-muted">{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} className="whitespace-nowrap px-3 py-3 text-left font-semibold">{flexRender(header.column.columnDef.header, header.getContext())}</th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map((row) => <tr key={row.id} className="border-t align-top hover:bg-muted/30">{row.getVisibleCells().map((cell) => <td key={cell.id} className="max-w-64 whitespace-pre-line px-3 py-3">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>)}</tbody></table>{!filteredRows.length ? <div className="p-8 text-center text-sm text-muted-foreground">No audit records match these filters.</div> : null}</div></CardContent></Card>
   </div>;
 }
 
-function buildRows(patients: PatientWithStage[], events: WorkflowEvent[], labels: Map<string, string>): ReportRow[] { const byPatient = new Map<string, WorkflowEvent[]>(); events.forEach((event) => byPatient.set(event.patient_id, [...(byPatient.get(event.patient_id) ?? []), event])); return patients.map((patient) => { const patientEvents = (byPatient.get(patient.id) ?? []).sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)); const reasons = new Set<string>(); const stages = new Set<string>(); let delayMinutes = 0; patientEvents.forEach((event, index) => { if (!event.delay_reason_ids.length) return; event.delay_reason_ids.forEach((id) => reasons.add(labels.get(id) ?? id)); stages.add(workflowStageLabels[event.workflow_stage_id] ?? event.workflow_stage_id); const previous = patientEvents[index - 1]?.timestamp ?? patient.created_at; delayMinutes += Math.max(0, Math.round((Date.parse(event.timestamp) - Date.parse(previous)) / 60_000)); }); return { hospitalNumber: patient.hospital_number, procedure: patient.procedure, specialty: patient.specialty, consultant: patient.consultant, priority: patient.cepod_priority, status: patient.cancelled ? "Cancelled" : patient.current_stage === "patient-out-of-recovery" ? "Completed" : patient.unresolved ? "Unresolved" : patient.booking_cohort === "moved_to_planned" ? "Planned" : "Active", dateBooked: formatRecordDate(patient.created_at), dateBookedKey: localDateKey(new Date(patient.created_at)), recordDate: formatRecordDate(patient.cancelled_at ?? patient.completed_at ?? patient.unresolved_at), cancellationReason: patient.cancellation_reason ?? "—", delay: reasons.size ? "Yes" : "No", delayReason: reasons.size ? [...reasons].join("\n") : "—", stagesAffected: stages.size ? [...stages].join("\n") : "—", delayMinutes }; }); }
+function buildRows(patients: PatientWithStage[], events: WorkflowEvent[], labels: Map<string, string>, configuration: TheatreConfiguration): ReportRow[] { const byPatient = new Map<string, WorkflowEvent[]>(); events.forEach((event) => byPatient.set(event.patient_id, [...(byPatient.get(event.patient_id) ?? []), event])); return patients.map((patient) => { const patientEvents = (byPatient.get(patient.id) ?? []).sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)); const reasons = new Set<string>(); const stages = new Set<string>(); let delayMinutes = 0; patientEvents.forEach((event, index) => { if (!event.delay_reason_ids.length) return; event.delay_reason_ids.forEach((id) => reasons.add(labels.get(id) ?? id)); stages.add(workflowStageLabels[event.workflow_stage_id] ?? event.workflow_stage_id); const previous = patientEvents[index - 1]?.timestamp ?? patient.created_at; delayMinutes += Math.max(0, Math.round((Date.parse(event.timestamp) - Date.parse(previous)) / 60_000)); }); const theatre = configuration.theatres.find((item) => item.id === patient.theatre_id); const suite = configuration.suites.find((item) => item.id === theatre?.suite_id); return { locationKey: theatre?.id ?? "other", suite: suite?.name ?? "Not available", theatre: theatre?.name ?? (patient.theatre_id ? "Unavailable theatre" : "Unassigned"), hospitalNumber: patient.hospital_number, procedure: patient.procedure, specialty: patient.specialty, consultant: patient.consultant, priority: patient.cepod_priority, status: patient.cancelled ? "Cancelled" : patient.current_stage === "patient-out-of-recovery" ? "Completed" : patient.unresolved ? "Unresolved" : patient.booking_cohort === "moved_to_planned" ? "Planned" : "Active", dateBooked: formatRecordDate(patient.created_at), dateBookedKey: localDateKey(new Date(patient.created_at)), recordDate: formatRecordDate(patient.cancelled_at ?? patient.completed_at ?? patient.unresolved_at), cancellationReason: patient.cancellation_reason ?? "—", delay: reasons.size ? "Yes" : "No", delayReason: reasons.size ? [...reasons].join("\n") : "—", stagesAffected: stages.size ? [...stages].join("\n") : "—", delayMinutes }; }); }
 function FilterField({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm font-semibold">{label}<div className="mt-1">{children}</div></label>; }
 function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input type="date" className="pl-9" value={value} onChange={(event) => onChange(event.target.value)} /></div>; }
 function getDateRange(preset: DatePreset, start: string, end: string) { const now = new Date(); if (preset === "custom") { const safeStart = start || localDateKey(now); const safeEnd = end || safeStart; return { start: safeStart <= safeEnd ? safeStart : safeEnd, end: safeStart <= safeEnd ? safeEnd : safeStart }; } if (preset === "today") return { start: localDateKey(now), end: localDateKey(now) }; const from = new Date(now); if (preset === "7d") from.setDate(now.getDate() - 6); if (preset === "month") from.setDate(1); if (preset === "year") { from.setMonth(0); from.setDate(1); } return { start: localDateKey(from), end: localDateKey(now) }; }

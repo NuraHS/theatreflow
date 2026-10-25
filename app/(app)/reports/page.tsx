@@ -1,11 +1,12 @@
 import { FileDown } from "lucide-react";
 import { PatientReportTable } from "@/components/reports/patient-report-table";
 import { getDelayReasons, getTodaysPatients, getWorkflowEvents } from "@/lib/repositories/workflow-repository";
+import { getTheatreConfiguration } from "@/lib/repositories/theatre-repository";
 import { requirePagePermission } from "@/lib/services/access-control";
 
 export default async function ReportsPage() {
   await requirePagePermission("exportReports");
-  const [patients, events, delayReasons] = await Promise.all([getTodaysPatients(), getWorkflowEvents(), getDelayReasons()]);
+  const [patients, events, delayReasons, theatreConfiguration] = await Promise.all([getTodaysPatients(), getWorkflowEvents(), getDelayReasons(), getTheatreConfiguration()]);
 
   return (
     <div className="space-y-5">
@@ -16,7 +17,7 @@ export default async function ReportsPage() {
         </div>
         <p className="mt-1 text-sm text-muted-foreground">Export filtered CEPOD audit data as PDF, CSV or Excel.</p>
       </section>
-      <PatientReportTable patients={patients} events={events} delayReasons={delayReasons} />
+      <PatientReportTable patients={patients} events={events} delayReasons={delayReasons} theatreConfiguration={theatreConfiguration} />
     </div>
   );
 }
