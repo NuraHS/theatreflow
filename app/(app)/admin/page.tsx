@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, HeartPulse, ShieldCheck, Stethoscope, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { requirePagePermission } from "@/lib/services/access-control";
+import { getCurrentUserAccess, isRolePermissionEnforced, requirePagePermission } from "@/lib/services/access-control";
+
+export const dynamic = "force-dynamic";
 
 const adminAreas = [
   {
@@ -13,19 +15,21 @@ const adminAreas = [
   {
     href: "/admin/system-health",
     title: "System health",
-    description: "Review application, database, storage and installation health and export a support bundle.",
+    description: "Check the current installation, see where its configuration comes from and export structured technical evidence.",
     icon: HeartPulse
   },
   {
     href: "/admin/diagnostics",
     title: "Diagnostics",
-    description: "Run live component checks, record technical incidents and review the health audit history.",
+    description: "Investigate faults, record technical incidents and save manual snapshots before and after a change.",
     icon: Stethoscope
   }
 ] as const;
 
 export default async function AdminDashboardPage() {
   await requirePagePermission("manageUsers");
+  const access = await getCurrentUserAccess();
+  const enforced = isRolePermissionEnforced();
 
   return (
     <div className="space-y-5">
@@ -38,10 +42,16 @@ export default async function AdminDashboardPage() {
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Secure access to user management, system monitoring and technical support tools.</p>
           </div>
-          <Badge tone="blue">Administrator only</Badge>
+          <Badge tone={enforced ? "blue" : "amber"}>{enforced ? "Role enforcement enabled" : "Access enforcement disabled"}</Badge>
         </div>
       </section>
 
+      <section className="rounded-lg border bg-card p-5 text-sm space-y-2">
+        <p><strong>Session:</strong> {access.authenticated ? "Signed in with an installation account." : "No authenticated session — this is bootstrap/demo access."}</p>
+        <p><strong>Database:</strong> When connected, saved database configuration overrides code defaults. Applying code updates does not apply SQL migrations.</p>
+        <p><strong>Offline support workflow:</strong> Check health → record a snapshot → investigate and record the fault → export structured evidence → review and share it → apply a verified offline patch → check health and record the result.</p>
+        <p><strong>Installation readiness:</strong> The current app has on-demand diagnostics. A USB installation package, persistent monitoring service, automated backup/restore checks and verified patch installer still need building and testing for an airgapped deployment.</p>
+      </section>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {adminAreas.map((area) => (
           <Link key={area.href} href={area.href} className="clinical-card group flex min-h-56 cursor-pointer flex-col rounded-lg border bg-card p-5 text-card-foreground transition-colors duration-200 hover:border-primary hover:bg-cyan-50 focus-visible:ring-4 focus-visible:ring-ring/30 dark:hover:bg-cyan-950/20">

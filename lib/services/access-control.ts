@@ -24,12 +24,10 @@ const demoAdministrator: CurrentUserAccess = {
 };
 
 export async function getCurrentUserAccess(): Promise<CurrentUserAccess> {
-  if (!rolePermissionsEnforced) return demoAdministrator;
-
   const authSupabase = await createServerSupabaseClient();
-  if (!authSupabase) return unauthenticatedAccess();
+  if (!authSupabase) return rolePermissionsEnforced ? unauthenticatedAccess() : demoAdministrator;
   const { data: { user } } = await authSupabase.auth.getUser();
-  if (!user) return unauthenticatedAccess();
+  if (!user) return rolePermissionsEnforced ? unauthenticatedAccess() : demoAdministrator;
 
   const serviceSupabase = createServiceRoleSupabaseClient();
   const supabase = serviceSupabase ?? authSupabase;
@@ -56,7 +54,7 @@ export async function getCurrentUserAccess(): Promise<CurrentUserAccess> {
     full_name: profile?.full_name ?? user.user_metadata?.full_name ?? null,
     job_title: profile?.job_title ?? null,
     role,
-    active: profile?.active ?? true,
+    active: profile?.active ?? false,
     primary_suite_id: profile?.primary_suite_id ?? null,
     suite_ids: suiteIds,
     theatre_ids: unique((theatreAccess.data ?? []).map((item) => String(item.theatre_id))),

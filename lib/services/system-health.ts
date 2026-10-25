@@ -6,20 +6,39 @@ import packageJson from "@/package.json";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { SystemHealthCheck, SystemHealthReport, SystemHealthStatus } from "@/lib/types/system-health";
 
+const EXPECTED_SCHEMA_VERSION = "0019";
+
 export async function getSystemHealthReport(): Promise<SystemHealthReport> {
   const generatedAt = new Date().toISOString();
   const supabase = createServiceRoleSupabaseClient();
-  const [database, authentication, storage, backup, migration, activity, certificate] = await Promise.all([
+  const [database, authentication, storage, backup, migration, activity, certificate, configuration] = await Promise.all([
     checkDatabase(supabase),
     checkAuthentication(supabase),
     checkStorage(),
     checkBackup(supabase),
     checkMigration(supabase),
     checkTechnicalActivity(supabase),
-    checkCertificate()
+    checkCertificate(),
+    checkConfiguration(supabase)
   ]);
 
+  const rolePermissionsEnforced = process.env.THEATREFLOW_ENFORCE_ROLE_PERMISSIONS === "true";
   const checks: SystemHealthCheck[] = [
+    {
+      id: "configuration", label: "Theatre configuration", status: configuration.status,
+      summary: configuration.source === "database" ? "Locations loaded from the installation database" : configuration.source === "demo-fallback" ? "Using built-in demonstration locations" : "Database configuration unavailable; operational pages may show demo fallback",
+      detail: configuration.legacy_locations ? "The database still contains the original theatre names. Apply migration 0018_esth_theatre_locations.sql; deploying code alone does not update database rows." : configuration.source === "database" ? `${configuration.active_suites} active suites and ${configuration.active_theatres} active theatres. Database rows override built-in defaults.` : "Built-in defaults are not evidence of a working database. Confirm the database connection before recording operational data."
+    },
+    {
+      id: "access-control", label: "Access enforcement", status: rolePermissionsEnforced ? "healthy" : "warning",
+      summary: rolePermissionsEnforced ? "Role permission checks are enabled" : "Role permission checks are disabled",
+      detail: rolePermissionsEnforced ? "Privileged actions require a signed-in active role. Patients, Live Board and Dashboards still have public viewing access under the current access model." : "Unauthenticated users can open administrative tools. This is bootstrap/demo access, not an authenticated administrator session. Enable enforcement after testing an administrator account."
+    },
+    {
+      id: "incidents", label: "Technical incident register", status: activity.status,
+      summary: activity.open_incidents === null ? "Incident counts could not be read" : `${activity.open_incidents} recorded open incidents`,
+      detail: "Counts describe entries in the technical register, not automatically detected faults. An unavailable register does not mean there are no incidents."
+    },
     {
       id: "application",
       label: "Application",
@@ -32,7 +51,7 @@ export async function getSystemHealthReport(): Promise<SystemHealthReport> {
       label: "Database",
       status: database.status,
       summary: statusSummary(database.status, "Database connection is healthy", "Database connection needs attention", "Database check failed", "Database is not configured"),
-      detail: database.detail ?? (database.latency_ms === null ? "Configure the Supabase project URL and server-side service-role key in Vercel." : `Query completed in ${database.latency_ms} ms.`),
+      detail: database.detail ?? (database.latency_ms === null ? "Configure the database URL and server-side service-role key in this installation." : `Query completed in ${database.latency_ms} ms.`),
       latency_ms: database.latency_ms
     },
     {
@@ -61,7 +80,7 @@ export async function getSystemHealthReport(): Promise<SystemHealthReport> {
       label: "Database migration",
       status: migration.status,
       summary: migration.version ? `${migration.version} — ${migration.name}` : "Migration status is unavailable",
-      detail: migration.applied_at ? `Applied ${new Date(migration.applied_at).toLocaleString("en-GB")}.` : "Run the latest Theatreflow migration to enable tracking."
+      detail: `Expected migration ${migration.expected_version}. ` + (migration.applied_at ? `Latest recorded migration applied ${new Date(migration.applied_at).toLocaleString("en-GB")}. This reads the migration register; it does not verify every table or prove compatibility.` : "The migration register could not be verified.")
     },
     {
       id: "certificate",
@@ -76,7 +95,10 @@ export async function getSystemHealthReport(): Promise<SystemHealthReport> {
     generated_at: generatedAt,
     overall_status: overallStatus(checks),
     deployment_mode: isManagedHosting() ? "Cloud hosting / Supabase" : process.env.THEATREFLOW_DEPLOYMENT_MODE ?? "Local / on-premises ready",
+    configuration,
+    role_permissions_enforced: rolePermissionsEnforced,
     application: {
+      build_id: safeBuildId(),
       version: packageJson.version,
       node_version: process.version,
       uptime_seconds: Math.round(process.uptime()),
@@ -167,19 +189,21 @@ async function checkBackup(supabase: ReturnType<typeof createServiceRoleSupabase
   if (!supabase) return { status: "unknown", last_success_at: null, age_hours: null };
   const { data, error } = await supabase.from("system_maintenance_events").select("occurred_at").eq("event_type", "backup").eq("status", "success").order("occurred_at", { ascending: false }).limit(1).maybeSingle();
   if (error || !data?.occurred_at) return { status: "unknown", last_success_at: null, age_hours: null };
-  const ageHours = Math.max(0, Math.round((Date.now() - Date.parse(data.occurred_at)) / 3_600_000));
+  const elapsed = Date.now() - Date.parse(data.occurred_at);
+  if (!Number.isFinite(elapsed) || elapsed < 0) return { status: "unknown", last_success_at: null, age_hours: null };
+  const ageHours = Math.floor(elapsed / 3_600_000);
   return { status: ageHours >= 48 ? "critical" : ageHours >= 36 ? "warning" : "healthy", last_success_at: data.occurred_at, age_hours: ageHours };
 }
 
 async function checkMigration(supabase: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<SystemHealthReport["migration"]> {
-  if (!supabase) return { status: "unknown", version: null, name: null, applied_at: null };
+  if (!supabase) return { status: "unknown", version: null, name: null, applied_at: null, expected_version: EXPECTED_SCHEMA_VERSION };
   const { data, error } = await supabase.from("theatreflow_schema_migrations").select("version,name,applied_at").order("version", { ascending: false }).limit(1).maybeSingle();
-  if (error || !data) return { status: "unknown", version: null, name: null, applied_at: null };
-  return { status: "healthy", version: data.version, name: data.name, applied_at: data.applied_at };
+  if (error || !data) return { status: "unknown", version: null, name: null, applied_at: null, expected_version: EXPECTED_SCHEMA_VERSION };
+  return { status: data.version === EXPECTED_SCHEMA_VERSION ? "healthy" : "warning", version: data.version, name: data.name, applied_at: data.applied_at, expected_version: EXPECTED_SCHEMA_VERSION };
 }
 
 async function checkTechnicalActivity(supabase: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<SystemHealthReport["activity"]> {
-  if (!supabase) return { open_incidents: 0, critical_incidents_24h: 0, warnings_24h: 0 };
+  if (!supabase) return { status: "unknown", open_incidents: null, critical_incidents_24h: null, warnings_24h: null };
   const since = new Date(Date.now() - 86_400_000).toISOString();
   const [open, critical, warnings] = await Promise.all([
     supabase.from("system_incidents").select("id", { head: true, count: "exact" }).neq("status", "resolved"),
@@ -187,9 +211,10 @@ async function checkTechnicalActivity(supabase: ReturnType<typeof createServiceR
     supabase.from("system_incidents").select("id", { head: true, count: "exact" }).eq("severity", "warning").gte("occurred_at", since)
   ]);
   return {
-    open_incidents: open.error ? 0 : open.count ?? 0,
-    critical_incidents_24h: critical.error ? 0 : critical.count ?? 0,
-    warnings_24h: warnings.error ? 0 : warnings.count ?? 0
+    status: open.error || critical.error || warnings.error || open.count === null || critical.count === null || warnings.count === null ? "unknown" : critical.count > 0 ? "critical" : warnings.count > 0 ? "warning" : "healthy",
+    open_incidents: open.error ? null : open.count,
+    critical_incidents_24h: critical.error ? null : critical.count,
+    warnings_24h: warnings.error ? null : warnings.count
   };
 }
 
@@ -229,4 +254,22 @@ function formatRelativeHours(hours: number | null) {
   if (hours === 0) return "within the last hour";
   if (hours === 1) return "1 hour ago";
   return `${hours} hours ago`;
+}
+
+
+async function checkConfiguration(supabase: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<SystemHealthReport["configuration"]> {
+  if (!supabase) return { status: "warning", source: "demo-fallback", active_suites: null, active_theatres: null, legacy_locations: null };
+  const [suites, theatres, recovery] = await Promise.all([
+    supabase.from("theatre_suites").select("code", { count: "exact" }).eq("active", true),
+    supabase.from("theatres").select("id", { head: true, count: "exact" }).eq("active", true),
+    supabase.from("recovery_areas").select("id", { head: true, count: "exact" }).eq("active", true)
+  ]);
+  if (suites.error || theatres.error || recovery.error || !suites.data?.length) return { status: "unknown", source: "unavailable", active_suites: null, active_theatres: null, legacy_locations: null };
+  const legacy = suites.data.some(suite => ["st-james", "atkinson-morley", "gynae"].includes(suite.code));
+  return { status: legacy ? "warning" : "healthy", source: "database", active_suites: suites.count, active_theatres: theatres.count, legacy_locations: legacy };
+}
+
+function safeBuildId() {
+  const value = process.env.THEATREFLOW_BUILD_ID ?? process.env.VERCEL_GIT_COMMIT_SHA;
+  return value && /^[a-f0-9]{7,64}$/i.test(value) ? value : null;
 }

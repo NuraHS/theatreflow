@@ -4,7 +4,7 @@ This guide explains how the Admin login works, how to create the first administr
 
 ## How Admin login works
 
-When role enforcement is enabled, the navigation bar shows **Admin login** unless the current signed-in account has an active `administrator` profile. Selecting it opens the administrator login dialog. In local demonstration mode the entry remains labelled **Admin login** so the bootstrap flow is always available.
+When role enforcement is enabled, the navigation bar shows **Admin login** unless the current signed-in account has an active `administrator` profile. Selecting it opens the administrator login dialog. While role enforcement is disabled, unauthenticated bootstrap access remains available. A real authenticated management session is now shown as that user rather than being replaced by Demo Administrator. The dashboard uses the configured database when available; bootstrap access does not select a separate demonstration database.
 
 The login has several independent checks:
 
@@ -45,7 +45,7 @@ The first account is bootstrapped while role enforcement is off:
 
 1. Confirm `THEATREFLOW_ENFORCE_ROLE_PERMISSIONS=false` and restart Theatreflow.
 2. Select **Admin login** in the navigation bar.
-3. Select **Open demo Admin dashboard**.
+3. Select **Open dashboard without signing in**.
 4. Open **Users and access**.
 5. Select **New user**.
 6. Enter the administrator's full name, job title and email address.
@@ -95,3 +95,22 @@ Check the following in order:
 6. The browser is using the correct local Theatreflow installation.
 
 If role enforcement was enabled before a working administrator was created, temporarily set `THEATREFLOW_ENFORCE_ROLE_PERMISSIONS=false`, restart the app, complete the bootstrap steps above, test the account, then re-enable enforcement.
+
+
+## Investigate a rejected login
+
+An “Invalid login credentials” response comes from the authentication step,
+before Theatreflow checks the management profile. A healthy authentication
+health check tests the service administration API, not a particular password.
+
+After deploying the monitoring audit changes, open Users and access and check the
+account's Authentication account information. It verifies whether the profile ID
+links to an Auth user, whether the email matches, confirmation and ban status.
+It does not test the password. A linked user with rejected credentials needs the
+password recovery process for that installation; do not share a password in chat.
+
+Theatreflow users belong to the configured Supabase project. Check that the
+account was created in the same project used by the deployed app. Browser public
+configuration is built into a deployment; redeploy after changing it.
+
+See AIRGAPPED_ADMIN_AUDIT.md for monitoring limits and the offline support roadmap.

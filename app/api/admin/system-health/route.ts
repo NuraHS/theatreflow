@@ -15,7 +15,7 @@ export async function POST() {
   const report = await getSystemHealthReport();
   const result = await recordSystemHealthSnapshot(report);
   if (result.error) {
-    const hint = result.error.includes("system_health_snapshots") ? " Run migration 0009_system_health_monitoring.sql first." : "";
+    const hint = /critical_incidents_24h|warnings_24h/.test(result.error) ? " Apply migration 0019_monitoring_unknown_counts.sql to preserve unavailable counts." : result.error.includes("system_health_snapshots") ? " Run migration 0009_system_health_monitoring.sql first." : "";
     return NextResponse.json({ error: `${result.error}${hint}` }, { status: 400 });
   }
   return NextResponse.json({ ok: true, snapshot: result.data, report });

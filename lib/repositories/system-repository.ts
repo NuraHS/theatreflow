@@ -3,35 +3,35 @@ import "server-only";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { SystemHealthReport, SystemHealthSnapshot, SystemIncident, SystemMaintenanceEvent } from "@/lib/types/system-health";
 
-export async function getSystemIncidents(limit = 100): Promise<SystemIncident[]> {
+export async function getSystemIncidents(limit = 100, strict = false): Promise<SystemIncident[]> {
   const supabase = await getSystemClient();
-  if (!supabase) return [];
+  if (!supabase) { if (strict) throw new Error("Technical audit database is not configured."); return []; }
   const { data, error } = await supabase.from("system_incidents").select("*").order("occurred_at", { ascending: false }).limit(limit);
-  if (error || !data) return [];
+  if (error || !data) { if (strict) throw new Error("Technical audit collection could not be read."); return []; }
   return data as SystemIncident[];
 }
 
-export async function getSystemHealthSnapshots(limit = 100): Promise<SystemHealthSnapshot[]> {
+export async function getSystemHealthSnapshots(limit = 100, strict = false): Promise<SystemHealthSnapshot[]> {
   const supabase = await getSystemClient();
-  if (!supabase) return [];
+  if (!supabase) { if (strict) throw new Error("Technical audit database is not configured."); return []; }
   const { data, error } = await supabase.from("system_health_snapshots").select("*").order("checked_at", { ascending: false }).limit(limit);
-  if (error || !data) return [];
+  if (error || !data) { if (strict) throw new Error("Technical audit collection could not be read."); return []; }
   return data as SystemHealthSnapshot[];
 }
 
-export async function getSystemMaintenanceEvents(limit = 100): Promise<SystemMaintenanceEvent[]> {
+export async function getSystemMaintenanceEvents(limit = 100, strict = false): Promise<SystemMaintenanceEvent[]> {
   const supabase = await getSystemClient();
-  if (!supabase) return [];
+  if (!supabase) { if (strict) throw new Error("Technical audit database is not configured."); return []; }
   const { data, error } = await supabase.from("system_maintenance_events").select("*").order("occurred_at", { ascending: false }).limit(limit);
-  if (error || !data) return [];
+  if (error || !data) { if (strict) throw new Error("Technical audit collection could not be read."); return []; }
   return data as SystemMaintenanceEvent[];
 }
 
-export async function getKnownSchemaMigrations() {
+export async function getKnownSchemaMigrations(strict = false) {
   const supabase = await getSystemClient();
-  if (!supabase) return [];
+  if (!supabase) { if (strict) throw new Error("Technical audit database is not configured."); return []; }
   const { data, error } = await supabase.from("theatreflow_schema_migrations").select("version,name,applied_at").order("version", { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) { if (strict) throw new Error("Technical audit collection could not be read."); return []; }
   return data as Array<{ version: string; name: string; applied_at: string }>;
 }
 

@@ -37,4 +37,10 @@ where t.suite_id = s.id
   and s.code in ('epsom-main', 'st-helier-a2', 'st-helier-b4')
   and t.code ~ '^(st-james|atkinson-morley|gynae)-theatre-[0-9]+$';
 
+insert into public.theatreflow_schema_migrations (version, name)
+values ('0018', 'ESTH theatre locations')
+on conflict (version) do update set name = excluded.name;
+
+notify pgrst, 'reload schema';
+
 commit;

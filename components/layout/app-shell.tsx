@@ -3,7 +3,6 @@ import { Activity, BarChart3, ClipboardList, FileDown, LayoutDashboard, Settings
 import { AdminAccessButton } from "@/components/layout/admin-access-button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
-import { Badge } from "@/components/ui/badge";
 import { can, type Permission } from "@/lib/constants/permissions";
 import type { CurrentUserAccess } from "@/lib/types/domain";
 
@@ -32,7 +31,6 @@ export function AppShell({ children, access, enforceRolePermissions }: { childre
             </span>
           </Link>
           <div className="flex items-center gap-2">
-            <Badge tone="green" className="hidden sm:inline-flex">Realtime ready</Badge>
             <ThemeToggle />
             <UserMenu access={access} enforced={enforceRolePermissions} />
           </div>

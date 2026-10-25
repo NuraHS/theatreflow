@@ -43,7 +43,15 @@ export async function GET() {
     theatre_ids: (theatreAccess.data ?? []).filter((item) => item.profile_id === profile.id).map((item) => item.theatre_id),
     specialty_ids: (specialtyAccess.data ?? []).filter((item) => item.profile_id === profile.id).map((item) => item.specialty)
   }));
-  return NextResponse.json({ users });
+  const verifiedUsers = await Promise.all(users.map(async (profile) => {
+    const { data, error } = await supabase.auth.admin.getUserById(profile.id);
+    const account = data.user;
+    const status: NonNullable<UserProfile["login_check"]>["status"] = error
+      ? (error.status === 404 || error.code === "user_not_found" ? "missing" : "unavailable")
+      : !account ? "missing" : profile.email?.trim().toLowerCase() !== account.email?.trim().toLowerCase() ? "email-mismatch" : "linked";
+    return { ...profile, login_check: { status, email_confirmed: account ? Boolean(account.email_confirmed_at) : null, banned: account ? Boolean(account.banned_until && Date.parse(account.banned_until) > Date.now()) : null } };
+  }));
+  return NextResponse.json({ users: verifiedUsers }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {

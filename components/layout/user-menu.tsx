@@ -28,7 +28,7 @@ export function UserMenu({ access, enforced }: { access: CurrentUserAccess; enfo
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-muted" title={ROLE_LABELS[access.role]}>
         <UserRound className="h-5 w-5" aria-hidden="true" />
       </span>
-      {enforced ? (
+      {enforced || access.authenticated ? (
         <Button type="button" variant="ghost" size="icon" aria-label="Sign out" title="Sign out" onClick={() => void signOut()}>
           <LogOut className="h-5 w-5" aria-hidden="true" />
         </Button>

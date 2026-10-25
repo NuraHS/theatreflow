@@ -58,7 +58,7 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
     event.preventDefault();
     setLoading(true);
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "");
+    const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
     const supabase = createClient();
 
@@ -76,7 +76,7 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
       setLoading(false);
-      toast.error(error?.message ?? "Unable to sign in.");
+      toast.error(error?.code === "invalid_credentials" ? "The email and password were not accepted by this installation’s authentication database. Check the Theatreflow account and saved password; this is separate from your administrator role." : error?.message ?? "Unable to sign in.");
       return;
     }
 
@@ -139,8 +139,8 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
             <CardContent className="space-y-4">
               {!enforced ? (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
-                  <p className="font-bold">Local demonstration mode</p>
-                  <p className="mt-1">Role enforcement is currently off. You can test an administrator login or open the demonstration dashboard.</p>
+                  <p className="font-bold">Access controls disabled</p>
+                  <p className="mt-1">Role enforcement is off. This dashboard uses the configured database when available; opening it without signing in does not create an authenticated session.</p>
                 </div>
               ) : null}
               <form onSubmit={signIn} className="space-y-4">
@@ -156,7 +156,7 @@ export function AdminAccessButton({ access, enforced }: { access: CurrentUserAcc
                   {loading ? "Checking management access..." : "Sign in to Admin"}
                 </Button>
               </form>
-              {!enforced ? <Button type="button" variant="outline" className="w-full" onClick={openDemoDashboard}>Open demo Admin dashboard</Button> : null}
+              {!enforced ? <Button type="button" variant="outline" className="w-full" onClick={openDemoDashboard}>Open dashboard without signing in</Button> : null}
             </CardContent>
           </Card>
         </div>

@@ -1,7 +1,9 @@
+export type ConnectionDiagnosticCode = "credentials" | "schema" | "paused" | "dns" | "network" | "request";
+
 export type SystemHealthStatus = "healthy" | "warning" | "critical" | "unknown";
 
 export type SystemHealthCheck = {
-  id: "application" | "database" | "authentication" | "storage" | "backup" | "migration" | "certificate";
+  id: "application" | "database" | "authentication" | "storage" | "backup" | "migration" | "certificate" | "configuration" | "access-control" | "incidents";
   label: string;
   status: SystemHealthStatus;
   summary: string;
@@ -18,10 +20,20 @@ export type SystemHealthReport = {
     node_version: string;
     uptime_seconds: number;
     memory_used_bytes: number;
+    build_id: string | null;
   };
+  configuration: {
+    status: SystemHealthStatus;
+    source: "database" | "demo-fallback" | "unavailable";
+    active_suites: number | null;
+    active_theatres: number | null;
+    legacy_locations: boolean | null;
+  };
+  role_permissions_enforced: boolean;
   database: {
     status: SystemHealthStatus;
     detail?: string;
+    diagnostic_code?: ConnectionDiagnosticCode;
     latency_ms: number | null;
     size_bytes: number | null;
     connection_count: number | null;
@@ -38,6 +50,7 @@ export type SystemHealthReport = {
   authentication: {
     status: SystemHealthStatus;
     detail?: string;
+    diagnostic_code?: ConnectionDiagnosticCode;
     active_users: number | null;
   };
   backup: {
@@ -50,6 +63,7 @@ export type SystemHealthReport = {
     version: string | null;
     name: string | null;
     applied_at: string | null;
+    expected_version: string;
   };
   certificate: {
     status: SystemHealthStatus;
@@ -57,9 +71,10 @@ export type SystemHealthReport = {
     days_remaining: number | null;
   };
   activity: {
-    open_incidents: number;
-    critical_incidents_24h: number;
-    warnings_24h: number;
+    status: SystemHealthStatus;
+    open_incidents: number | null;
+    critical_incidents_24h: number | null;
+    warnings_24h: number | null;
   };
   checks: SystemHealthCheck[];
 };
@@ -90,8 +105,8 @@ export type SystemHealthSnapshot = {
   storage_total_bytes: number | null;
   storage_used_bytes: number | null;
   app_version: string;
-  critical_incidents_24h: number;
-  warnings_24h: number;
+  critical_incidents_24h: number | null;
+  warnings_24h: number | null;
   details: Record<string, unknown>;
 };
 

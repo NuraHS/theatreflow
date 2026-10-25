@@ -18,7 +18,7 @@ export function LoginForm() {
     event.preventDefault();
     setLoading(true);
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email"));
+    const email = String(formData.get("email")).trim();
     const password = String(formData.get("password"));
     const supabase = createClient();
 

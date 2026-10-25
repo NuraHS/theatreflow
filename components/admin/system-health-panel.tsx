@@ -68,6 +68,12 @@ export function SystemHealthPanel({ initialReport }: { initialReport: SystemHeal
 
   return (
     <div className="space-y-4">
+      <Card><CardContent className="space-y-2 p-4 text-sm">
+        <p><strong>Data source:</strong> {report.configuration.source === "database" ? "Installation database — its saved locations override code defaults." : "Database configuration unavailable — operational pages may show built-in demo data."}</p>
+        <p><strong>Monitoring:</strong> Checks run when this page or a health endpoint is requested. This page refreshes every 30 seconds while open. Snapshots are saved only when requested; a persistent background collector is not installed.</p>
+        <p><strong>Meaning:</strong> Healthy means this specific check passed; Unknown means evidence is unavailable. A recorded backup is not a verified restore, and a migration record is not a full schema audit.</p>
+        <p><strong>Access:</strong> {report.role_permissions_enforced ? "Role enforcement enabled." : "Role enforcement disabled — this is bootstrap/demo access."}</p>
+      </CardContent></Card>
       <Card className={cn("border-2", statusBorder(report.overall_status))}>
         <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
@@ -102,13 +108,13 @@ export function SystemHealthPanel({ initialReport }: { initialReport: SystemHeal
       <section aria-labelledby="health-summary-title">
         <h2 id="health-summary-title" className="sr-only">System health summary</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon={Server} label="Version" value={report.application.version} detail={`Node ${report.application.node_version} · uptime ${formatDuration(report.application.uptime_seconds)}`} />
+          <MetricCard icon={Server} label="Application release" value={report.application.version} detail={`Build ${report.application.build_id?.slice(0, 12) ?? "not recorded"} · Node ${report.application.node_version} · process uptime ${formatDuration(report.application.uptime_seconds)}`} />
           <MetricCard icon={Database} label="Database size" value={formatBytes(report.database.size_bytes)} detail={report.database.connection_count === null ? "Connection metrics unavailable" : `${report.database.connection_count} of ${report.database.max_connections ?? "?"} connections`} />
           <MetricCard icon={HardDrive} label="Storage utilisation" value={report.storage.utilisation_percent === null ? "Not available" : `${report.storage.utilisation_percent}%`} detail={report.storage.utilisation_percent === null ? report.storage.source : `${formatBytes(report.storage.used_bytes)} of ${formatBytes(report.storage.total_bytes)}`} progress={report.storage.utilisation_percent} status={report.storage.status} />
-          <MetricCard icon={Archive} label="Last backup" value={report.backup.last_success_at ? formatDateTime(report.backup.last_success_at) : "Not recorded"} detail={report.backup.age_hours === null ? "Record backup events after deployment" : `${report.backup.age_hours} hours ago`} status={report.backup.status} />
-          <MetricCard icon={ShieldCheck} label="Last migration" value={report.migration.version ?? "Not recorded"} detail={report.migration.name ?? "Run migration 0009 to enable tracking"} status={report.migration.status} />
+          <MetricCard icon={Archive} label="Last recorded backup" value={report.backup.last_success_at ? formatDateTime(report.backup.last_success_at) : "Not recorded"} detail={report.backup.age_hours === null ? "Record backup events after deployment" : `${report.backup.age_hours} hours ago`} status={report.backup.status} />
+          <MetricCard icon={ShieldCheck} label="Latest recorded migration" value={report.migration.version ?? "Not recorded"} detail={`Expected ${report.migration.expected_version} · ${report.migration.name ?? "Register unavailable"}`} status={report.migration.status} />
           <MetricCard icon={Users} label="Configured users" value={report.authentication.active_users === null ? "Not available" : String(report.authentication.active_users)} detail="No user identities are exported" status={report.authentication.status} />
-          <MetricCard icon={AlertTriangle} label="Open incidents" value={String(report.activity.open_incidents)} detail={`${report.activity.critical_incidents_24h} critical · ${report.activity.warnings_24h} warnings in 24h`} status={report.activity.critical_incidents_24h ? "critical" : report.activity.warnings_24h ? "warning" : "healthy"} />
+          <MetricCard icon={AlertTriangle} label="Recorded open incidents" value={report.activity.open_incidents === null ? "Not available" : String(report.activity.open_incidents)} detail={report.activity.status === "unknown" ? "The incident register could not be fully read" : `${report.activity.critical_incidents_24h} critical · ${report.activity.warnings_24h} warnings recorded in 24h`} status={report.activity.status} />
           <MetricCard icon={Clock3} label="Certificate" value={report.certificate.days_remaining === null ? (report.deployment_mode === "Cloud hosting / Supabase" ? "Provider managed" : "Not configured") : `${report.certificate.days_remaining} days`} detail={report.certificate.expires_at ? `Expires ${new Date(report.certificate.expires_at).toLocaleDateString("en-GB")}` : report.deployment_mode === "Cloud hosting / Supabase" ? "Expiry is not monitored here" : "Set the local certificate expiry variable"} status={report.certificate.status} />
         </div>
       </section>
@@ -126,9 +132,9 @@ export function SystemHealthPanel({ initialReport }: { initialReport: SystemHeal
         <CardContent className="flex items-start gap-3 p-4 sm:p-5">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-cyan-800 dark:text-cyan-200" aria-hidden="true" />
           <div>
-            <h2 className="font-bold">Safe for offline supplier support</h2>
+            <h2 className="font-bold">Structured export for offline supplier support</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              The support bundle contains health checks, redacted technical incidents, maintenance history, version and migration metadata. It never queries patients, procedures, workflow events or the clinical audit log. Trust IT should review the file before sharing it through an approved route.
+              The support bundle contains structured health checks, incident classifications, maintenance dates and release metadata. Free-text descriptions, notes, user identities and historical details JSON are excluded. It does not query clinical tables. Review the export before sharing; attach any approved technical reproduction notes separately.
             </p>
           </div>
         </CardContent>

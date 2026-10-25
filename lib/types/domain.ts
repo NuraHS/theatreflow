@@ -45,6 +45,7 @@ export type TheatreConfiguration = {
 };
 
 export type UserProfile = {
+  login_check?: { status: "linked" | "missing" | "unavailable" | "email-mismatch"; email_confirmed: boolean | null; banned: boolean | null };
   id: string;
   email: string | null;
   full_name: string | null;
