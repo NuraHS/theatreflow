@@ -530,7 +530,7 @@ function PatientListEntry({
       onDragOver={canManageWorkflow ? (event) => event.preventDefault() : undefined}
       onDrop={canManageWorkflow ? onDrop : undefined}
       className={cn(
-        "rounded-lg border transition-colors duration-200",
+        "min-w-0 rounded-lg border transition-colors duration-200",
         listType === "unresolved"
           ? "border-red-400 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/35 dark:text-red-50"
           : priorityRowClasses(patient.cepod_priority),
@@ -538,7 +538,7 @@ function PatientListEntry({
         dragging && "opacity-50"
       )}
     >
-      <div className="grid grid-cols-[56px_1fr_auto] items-start gap-2 p-3 xl:grid-cols-[72px_128px_100px_100px_105px_105px_minmax(130px,1.2fr)_64px_105px_80px_58px_36px] xl:items-center xl:gap-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_44px] items-start gap-2 p-3 sm:grid-cols-[64px_minmax(0,1fr)_44px] xl:grid-cols-[72px_128px_100px_100px_105px_105px_minmax(130px,1.2fr)_64px_105px_80px_58px_36px] xl:items-center xl:gap-2">
         <div className="flex items-center gap-1">
           {listType === "cepod" ? (
             canManageWorkflow ? (
@@ -565,7 +565,7 @@ function PatientListEntry({
           <span className="min-w-6 text-center text-sm font-bold">{firstColumnValue}</span>
         </div>
 
-        <div className="min-h-11 text-left xl:contents">
+        <div className="col-span-2 row-start-2 min-h-11 min-w-0 text-left sm:col-span-1 sm:row-start-auto xl:contents">
           <div className="hidden min-w-0 xl:block">
             <p className="text-sm font-semibold leading-tight" title={theatreLocation?.suiteName ?? "Suite not assigned"}>
               {theatreLocation?.suiteName ?? "Suite not assigned"}
@@ -573,14 +573,14 @@ function PatientListEntry({
             <TheatreBadge theatreName={theatreLocation?.theatreName ?? "Theatre not assigned"} />
           </div>
           <div className="min-w-0">
-            <div className="flex min-w-0 items-baseline gap-4 xl:block">
-              <p className="shrink-0 text-base font-bold">{patient.hospital_number}</p>
-              <p className="min-w-0 truncate text-sm font-semibold xl:hidden" title={patient.patient_name || "Patient name not recorded"}>
+            <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4 xl:block">
+              <p className="min-w-0 break-all text-base font-bold">{patient.hospital_number}</p>
+              <p className="min-w-0 break-words text-sm font-semibold xl:hidden" title={patient.patient_name || "Patient name not recorded"}>
                 {patient.patient_name || "Patient name not recorded"}
               </p>
             </div>
-            <div className="mt-1 flex min-w-0 items-center gap-2 xl:hidden">
-              <p className="min-w-0 truncate text-xs font-semibold leading-tight text-muted-foreground" title={theatreLocation?.suiteName ?? "Suite not assigned"}>
+            <div className="mt-2 flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 xl:hidden">
+              <p className="min-w-0 break-words text-xs font-semibold leading-tight text-muted-foreground" title={theatreLocation?.suiteName ?? "Suite not assigned"}>
                 {theatreLocation?.suiteName ?? "Suite not assigned"}
               </p>
               <TheatreBadge theatreName={theatreLocation?.theatreName ?? "Theatre not assigned"} />
@@ -600,11 +600,11 @@ function PatientListEntry({
           <div className="hidden font-semibold xl:block">{patient.elapsed_minutes}m</div>
         </div>
 
-        <button type="button" onClick={onToggle} aria-label={expanded ? "Collapse patient details" : "Expand patient details"} className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md hover:bg-background/60">
+        <button type="button" onClick={onToggle} aria-label={expanded ? "Collapse patient details" : "Expand patient details"} aria-expanded={expanded} className="col-start-2 row-start-1 flex h-11 w-11 cursor-pointer items-center justify-center rounded-md hover:bg-background/60 sm:col-start-3 sm:row-start-auto xl:col-auto">
           <ChevronDown className={cn("h-5 w-5 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
         </button>
 
-        <div className="col-span-3 grid grid-cols-2 gap-2 text-sm xl:hidden">
+        <div className="col-span-2 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm sm:col-span-3 xl:hidden">
           <Info label="Specialty" value={patient.specialty} />
           <Info label="Consultant" value={patient.consultant} />
           <Info label="Procedure" value={patient.procedure} className="col-span-2" />
@@ -643,9 +643,9 @@ function PatientListEntry({
 
 function TheatreBadge({ theatreName }: { theatreName: string }) {
   return (
-    <Badge tone="blue" className="max-w-full shrink-0 gap-1 whitespace-nowrap px-2 py-0.5 text-xs leading-none xl:mt-1">
+    <Badge tone="blue" className="min-w-0 max-w-full gap-1 whitespace-normal px-2 py-0.5 text-xs leading-snug xl:mt-1">
       <DoorOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span className="truncate">{theatreName}</span>
+      <span className="min-w-0 break-words">{theatreName}</span>
     </Badge>
   );
 }
@@ -707,7 +707,7 @@ function ExpandedPatientCard({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <InfoBlock icon={<UserRound className="h-4 w-4" aria-hidden="true" />} label="Patient" value={patient.patient_name || "Not recorded"} />
         <InfoBlock label="Specialty" value={patient.specialty} />
@@ -825,12 +825,12 @@ function WorkflowTimeline({ stages, patient }: { stages: WorkflowStage[]; patien
 
 function InfoBlock({ icon, label, value, className }: { icon?: React.ReactNode; label: string; value: string; className?: string }) {
   return (
-    <div className={cn("rounded-lg border bg-card p-3", className)}>
+    <div className={cn("min-w-0 rounded-lg border bg-card p-3", className)}>
       <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground">
         {icon}
         {label}
       </p>
-      <p className="mt-1 font-bold">{value}</p>
+      <p className="mt-1 break-words font-bold">{value}</p>
     </div>
   );
 }
