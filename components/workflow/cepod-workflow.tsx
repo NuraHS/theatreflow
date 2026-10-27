@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { DelayReason, PatientWithStage, RecoveryArea, Theatre, TheatreSuite, WorkflowStage } from "@/lib/types/domain";
+import type { DelayReason, PatientWithStage, RecoveryArea, Theatre, TheatreConfiguration, TheatreSuite, WorkflowStage } from "@/lib/types/domain";
 import { getNextStage } from "@/lib/services/workflow-engine";
 import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { cn } from "@/lib/utils/cn";
@@ -230,6 +230,7 @@ export function CepodWorkflow({
           <PatientListEntry
             key={patient.id}
             listType="cepod"
+            locations={{ suites, theatres }}
             patient={patient}
             theatreLocation={patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined}
             stages={stages}
@@ -265,6 +266,7 @@ export function CepodWorkflow({
           <PatientListEntry
             key={patient.id}
             listType="planned"
+            locations={{ suites, theatres }}
             patient={patient}
             theatreLocation={patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined}
             stages={stages}
@@ -304,6 +306,7 @@ export function CepodWorkflow({
           <PatientListEntry
             key={patient.id}
             listType="unresolved"
+            locations={{ suites, theatres }}
             patient={patient}
             theatreLocation={patient.theatre_id ? theatreLocationById.get(patient.theatre_id) : undefined}
             stages={stages}
@@ -487,6 +490,7 @@ function PatientListCard({
 }
 
 function PatientListEntry({
+  locations,
   listType,
   patient,
   theatreLocation,
@@ -505,6 +509,7 @@ function PatientListEntry({
   onDragEnd,
   onDrop
 }: {
+  locations: Pick<TheatreConfiguration, "suites" | "theatres">;
   listType: "cepod" | "planned" | "unresolved";
   patient: PatientWithStage;
   theatreLocation?: { suiteId: string; suiteName: string; theatreName: string };
@@ -626,6 +631,7 @@ function PatientListEntry({
       {expanded ? (
         <div className="border-t border-current/15 bg-background/70 p-3 lg:p-4">
           <ExpandedPatientCard
+            locations={locations}
             patient={patient}
             nextStage={nextStage}
             delayReasons={delayReasons}
@@ -651,6 +657,7 @@ function TheatreBadge({ theatreName }: { theatreName: string }) {
 }
 
 function ExpandedPatientCard({
+  locations,
   patient,
   nextStage,
   delayReasons,
@@ -660,6 +667,7 @@ function ExpandedPatientCard({
   onMoveToCepod,
   onMoveToPlanned
 }: {
+  locations: Pick<TheatreConfiguration, "suites" | "theatres">;
   patient: PatientWithStage;
   nextStage: WorkflowStage | null;
   delayReasons: DelayReason[];
@@ -715,6 +723,7 @@ function ExpandedPatientCard({
         <InfoBlock label="Procedure" value={patient.procedure} />
         <InfoBlock label="Current stage" value={patient.stage.name} />
         <StageStartedEditor patient={patient} canManageWorkflow={canManageWorkflow} />
+        <BookedTheatreEditor patient={patient} locations={locations} canManageWorkflow={canManageWorkflow} />
         <InfoBlock label="Next stage" value={nextStage?.name ?? "Workflow complete"} className="sm:col-span-2 xl:col-span-1" />
       </div>
 
@@ -833,6 +842,53 @@ function InfoBlock({ icon, label, value, className }: { icon?: React.ReactNode; 
       <p className="mt-1 break-words font-bold">{value}</p>
     </div>
   );
+}
+
+function BookedTheatreEditor({ patient, locations, canManageWorkflow }: { patient: PatientWithStage; locations: Pick<TheatreConfiguration, "suites" | "theatres">; canManageWorkflow: boolean }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [theatreId, setTheatreId] = React.useState(patient.theatre_id ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const current = locations.theatres.find((theatre) => theatre.id === patient.theatre_id);
+  const suite = locations.suites.find((item) => item.id === current?.suite_id);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/patients/theatre", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: patient.id, theatre_id: theatreId })
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Unable to change the booked theatre.");
+      toast.success("Booked theatre updated.");
+      setOpen(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to change the booked theatre.");
+    } finally { setSaving(false); }
+  }
+
+  return <>
+    <button type="button" disabled={!canManageWorkflow} onClick={() => { setTheatreId(patient.theatre_id ?? ""); setOpen(true); }} className="min-w-0 cursor-pointer rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-muted disabled:cursor-default" aria-label="Edit booked theatre">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">Booked theatre {canManageWorkflow ? <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> : null}</p>
+      <p className="mt-1 break-words font-bold">{current?.name ?? "Not assigned"}</p>
+      {suite ? <p className="mt-1 break-words text-sm text-muted-foreground">{suite.name}</p> : null}
+    </button>
+    {open ? <div className="fixed inset-0 z-50 flex items-end justify-center bg-cyan-950/40 p-3 sm:items-center">
+      <div role="dialog" aria-modal="true" aria-labelledby={`theatre-editor-${patient.id}`} className="w-full max-w-md rounded-lg border bg-background p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3"><h2 id={`theatre-editor-${patient.id}`} className="text-lg font-bold">Edit booked theatre</h2><Button type="button" variant="ghost" size="icon" disabled={saving} aria-label="Close theatre editor" onClick={() => setOpen(false)}><XCircle className="h-5 w-5" aria-hidden="true" /></Button></div>
+        <label className="mt-4 block text-sm font-semibold">Suite / theatre
+          <Select className="mt-1" value={theatreId} onChange={(event) => setTheatreId(event.target.value)} disabled={saving} autoFocus>
+            <option value="" disabled>Select a theatre</option>
+            {locations.suites.filter((item) => item.active).map((item) => <optgroup key={item.id} label={item.name}>{locations.theatres.filter((theatre) => theatre.active && theatre.suite_id === item.id).map((theatre) => <option key={theatre.id} value={theatre.id}>{item.name} — {theatre.name}</option>)}</optgroup>)}
+          </Select>
+        </label>
+        <p className="mt-3 text-sm text-muted-foreground">The booking will use the selected theatre’s default recovery area. Its date, priority and workflow timings stay the same.</p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button><Button type="button" disabled={saving || !theatreId || theatreId === patient.theatre_id} onClick={() => void save()}>{saving ? "Saving..." : "Save theatre"}</Button></div>
+      </div>
+    </div> : null}
+  </>;
 }
 
 function StageStartedEditor({ patient, canManageWorkflow }: { patient: PatientWithStage; canManageWorkflow: boolean }) {
