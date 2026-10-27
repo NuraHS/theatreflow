@@ -18,6 +18,7 @@ import { getNextStage } from "@/lib/services/workflow-engine";
 import { useRealtimeWorkflow } from "@/hooks/use-realtime-workflow";
 import { cn } from "@/lib/utils/cn";
 import { getDelayStatus } from "@/lib/utils/delay";
+import { isPatientDueForTheatreList } from "@/lib/utils/patient-list";
 import { priorityLabel, priorityRowClasses, priorityTone } from "@/lib/utils/priority";
 import { formatUnresolvedThreshold } from "@/lib/utils/reconciliation";
 
@@ -98,9 +99,9 @@ export function CepodWorkflow({
 
   const unresolvedPatients = orderedPatients.filter((patient) => patient.unresolved);
   const livePatientsForLists = orderedPatients.filter((patient) => !patient.unresolved);
-  const cepodPatients = livePatientsForLists.filter((patient) => isCepodDue(patient, displayDate));
+  const cepodPatients = livePatientsForLists.filter((patient) => isPatientDueForTheatreList(patient, displayDate));
   const plannedPatients = livePatientsForLists
-    .filter((patient) => !isCepodDue(patient, displayDate))
+    .filter((patient) => !isPatientDueForTheatreList(patient, displayDate))
     .sort((a, b) => getOperationDate(a).localeCompare(getOperationDate(b)) || Date.parse(a.created_at) - Date.parse(b.created_at));
 
   const theatreNumberById = React.useMemo(
@@ -989,15 +990,6 @@ function getOperationDate(patient: PatientWithStage) {
   return patient.operation_date ?? patient.created_at.slice(0, 10);
 }
 
-function isCepodDue(patient: PatientWithStage, now: Date) {
-  const operationDate = getOperationDate(patient);
-  const today = toDateKey(now);
-
-  if (operationDate < today) return true;
-  if (operationDate > today) return false;
-  if (patient.created_at.slice(0, 10) === today) return true;
-  return now.getHours() >= 7;
-}
 
 function toDateKey(date: Date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);

@@ -8,6 +8,7 @@ import { getStageByIdOrName } from "@/lib/services/workflow-engine";
 import { getDelayStatus } from "@/lib/utils/delay";
 import { getReconciliationDueAt, getReconciliationReferenceTime, getUnresolvedThresholdMinutes } from "@/lib/utils/reconciliation";
 import { minutesSince } from "@/lib/utils/time";
+import { selectLiveBoardPatients } from "@/lib/utils/patient-list";
 import { demoData } from "./demo-data";
 
 export async function getWorkflowStages(): Promise<WorkflowStage[]> {
@@ -121,9 +122,7 @@ export async function getActivePatients() {
 
 export async function getLiveBoardPatients() {
   const patients = await getTodaysPatients();
-  const today = localDateKey(new Date());
-
-  return patients.filter((patient) => !patient.cancelled && patient.operation_date === today);
+  return selectLiveBoardPatients(patients, new Date());
 }
 
 function localDateKey(date: Date) {
